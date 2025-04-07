@@ -22,10 +22,10 @@ int negamax(Board &board, int depth, int alpha, int beta)
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
 
-   if (moves.size == 0)
+   if (static_cast<int>(moves.size) == 0)
    {
       // Check for checkmate or stalemate
-      std::cout << "Check for checkmate or stalemate\n";
+      // std::cout << "Check for checkmate or stalemate\n";
       bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
 
       if (inCheck)
@@ -60,7 +60,6 @@ int negamax(Board &board, int depth, int alpha, int beta)
       if (alpha >= beta)
          break; // Beta cutoff
    }
-   std::cout<< board<<std::endl;
    return bestScore;
 }
 
