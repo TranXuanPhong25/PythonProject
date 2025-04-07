@@ -42,7 +42,6 @@ def draw_board(screen, board, selected_square, player_time, ai_time):
 
 # Khởi tạo Stockfish
 engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
-
 board = chess.Board()
 
 # Khởi tạo cửa sổ Pygame
