@@ -12,7 +12,7 @@ SRCS = $(wildcard *.cpp)
 OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 
 # Target executable
-TARGET = $(BIN_DIR)/uci
+TARGET = $(BIN_DIR)/uci.exe
 
 # Phony targets
 .PHONY: all clean dirs
