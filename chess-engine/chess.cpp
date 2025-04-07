@@ -1,4 +1,6 @@
 #include "types.h"
+
+//Initialize FEN board
 Board::Board(std::string fen) {
     initializeLookupTables();
     stateHistory.reserve(MAX_PLY);
@@ -27,6 +29,7 @@ Board::Board(std::string fen) {
     enemyEmptyBB = EnemyEmpty(sideToMove);
 }
 
+//Analyze FEN
 void Board::applyFen(const std::string &fen) {
     for (Piece p = WhitePawn; p < None; p++) {
         piecesBB[p] = 0ULL;
@@ -100,6 +103,7 @@ void Board::applyFen(const std::string &fen) {
 }
 
 
+// Do a move
 void Board::makeMove(Move move) {
     PieceType pt = piece(move);
     Piece p = makePiece(pt, sideToMove);
@@ -257,6 +261,8 @@ void Board::makeMove(Move move) {
     sideToMove = ~sideToMove;
 }
 
+
+// reset a move
 void Board::unmakeMove(Move move) {
     const State restore = stateHistory.back();
     stateHistory.pop_back();

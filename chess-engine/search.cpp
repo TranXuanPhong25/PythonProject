@@ -130,7 +130,7 @@ Move getBestMove(Board &board, int depth)
       board.makeMove(move);
       int score = alphaBeta(board, depth - 1, mated_in(0), mate_in(0));
       // random score
-      //  int score = rand() % 1000 - 500;
+      // int score = rand() % 1000 - 500;
       board.unmakeMove(move);
 
       if ((board.sideToMove == White && score > bestScore) ||
