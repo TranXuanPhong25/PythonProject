@@ -29,9 +29,14 @@ GAME_OVER = 2
 piece_images = {}
 pieces = ['p', 'r', 'n', 'b', 'q', 'k', 'P', 'R', 'N', 'B', 'Q', 'K']
 for piece in pieces:
-    piece_images[piece] = pygame.transform.scale(
-        pygame.image.load(f'assets/png/{piece}.png'), (SQUARE_SIZE, SQUARE_SIZE)
-    )
+    if piece.islower():
+        piece_images[piece] = pygame.transform.scale(
+            pygame.image.load(f'assets/black/{piece}.png'), (SQUARE_SIZE, SQUARE_SIZE)
+        )
+    else:
+        piece_images[piece] = pygame.transform.scale(
+            pygame.image.load(f'assets/white/{piece}.png'), (SQUARE_SIZE, SQUARE_SIZE)
+        )
 
 
 # Hàm vẽ bàn cờ

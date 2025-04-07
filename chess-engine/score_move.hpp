@@ -17,4 +17,4 @@ constexpr int mvv_lva[12][12] = {
 };
 
 
-void scoreMoves(Movelist &moves, Board &board, int depth);
+void scoreMoves(Movelist &moves, Board &board, int depth,Move ttMove = NO_MOVE);

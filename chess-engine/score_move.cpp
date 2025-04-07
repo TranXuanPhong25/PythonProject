@@ -1,5 +1,5 @@
 #include "score_move.hpp"
-void scoreMoves(Movelist &moves, Board &board, int depth)
+void scoreMoves(Movelist &moves, Board &board, int depth, Move ttMove)
 {
     for (int i = 0; i < moves.size; ++i)
     {
@@ -9,8 +9,13 @@ void scoreMoves(Movelist &moves, Board &board, int depth)
         Piece attacker = board.pieceAtB(from(move));
         Piece victim = board.pieceAtB(to(move));
 
+        // Prioritize TT move
+        if (move == ttMove)
+        {
+            score = 20000;
+        }
         // capture
-        if (victim != None)
+        else if (victim != None)
         {
             score += mvv_lva[attacker][victim];
             // TODO: implement SEE
@@ -41,7 +46,7 @@ void scoreMoves(Movelist &moves, Board &board, int depth)
                 break;
             }
         }
-        
+
         // 3. Killer moves (moves that caused beta cutoffs at same depth in another branch)
         // Can be implemented by tracking killers in search and checking here
 
