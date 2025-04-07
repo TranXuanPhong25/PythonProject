@@ -14,7 +14,13 @@
 #include <vector>
 
 #if defined(_MSC_VER) && defined(_WIN64) // MSVC, WIN64
+#include <intrin.h>
 #endif
+
+namespace NNUE
+{
+   struct Net;
+}
 
 using namespace Chess_Lookup::Fancy;
 
@@ -885,6 +891,8 @@ static constexpr U64 castlingKey[16] = {0,
 
       Square KingSQ(Color c) const;
 
+      void refresh(NNUE::Net &nnue);
+
       U64 Enemy(Color c) const;
       U64 EnemyEmpty(Color c) const;
       U64 Us(Color c) const;
@@ -922,6 +930,14 @@ static constexpr U64 castlingKey[16] = {0,
       U64 allAttackers(Square sq, U64 occupiedBB);
       U64 attackersForSide(Color attackerColor, Square sq, U64 occupiedBB);
 
+      /// @brief plays the move on the internal board
+      /// @param move
+      void makeMove(Move move);
+
+      /// @brief unmake a move played on the internal board
+      /// @param move
+      void unmakeMove(Move move);
+
       /// @brief make a nullmove
       void makeNullMove();
 
@@ -933,16 +949,24 @@ static constexpr U64 castlingKey[16] = {0,
       /// @param sq
       void removePiece(Piece piece, Square sq);
 
+      template <bool updateNNUE>
+      void removePiece(Piece piece, Square sq, Square kSQ_White, Square kSQ_Black);
+
       /// @brief Place a Piece on the board
       /// @param piece
       /// @param sq
       void placePiece(Piece piece, Square sq);
+      template <bool updateNNUE>
+      void placePiece(Piece piece, Square sq, Square kSQ_White, Square kSQ_Black);
 
       /// @brief Move a piece on the board
       /// @param piece
       /// @param fromSq
       /// @param toSq
       void movePiece(Piece piece, Square fromSq, Square toSq);
+
+      template <bool updateNNUE>
+      void movePiece(Piece piece, Square fromSq, Square toSq, Square kSQ_White, Square kSQ_Black);
 
       U64 attacksByPiece(PieceType pt, Square sq, Color c) const;
 

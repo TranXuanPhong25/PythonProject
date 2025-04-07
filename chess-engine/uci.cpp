@@ -1,5 +1,5 @@
 #include "uci.h"
-#include "search.h"
+#include "search.hpp"
 #include "tt.h"
 #include "types.h"
 
@@ -13,9 +13,6 @@ static void uci_send_id() {
     std::cout << "id author " << AUTHOR << std::endl;
     std::cout << "option name Hash type spin default 64 min 4 max " << MAXHASH << std::endl;
     std::cout << "option name Threads type spin default 1 min 1 max 1" << std::endl;
-
-
-
     std::cout << "uciok" << std::endl;
 }
 
@@ -23,7 +20,6 @@ static void set_option(std::istream &is, std::string &token, std::string name, i
     if (token == name) {
         is >> std::skipws >> token;
         is >> std::skipws >> token;
-
         value = std::stoi(token);
     }
 }
@@ -37,13 +33,15 @@ bool IsUci = false;
 TranspositionTable *table;
 
 void uci_loop(int argv, char **argc) {
-    std::cout << "Rice Copyright (C) 2023  Rafid Ahsan" << std::endl;
+    std::cout << "Chess Engine Copyright (C) 2023" << std::endl;
 
     auto ttable = std::make_unique<TranspositionTable>();
     table = ttable.get();
     table->Initialize(DefaultHashSize);
 
-
+    // Create our board instance
+    Board board(DEFAULT_POS);
+    int default_depth = 4; // Default search depth
 
     std::string command;
     std::string token;
@@ -55,24 +53,20 @@ void uci_loop(int argv, char **argc) {
         is >> std::skipws >> token;
 
         if (token == "stop") {
-
+            // For a simple non-threaded implementation, this does nothing
         } else if (token == "quit") {
- 
             break;
         } else if (token == "isready") {
-
             std::cout << "readyok" << std::endl;
             continue;
-
         } else if (token == "ucinewgame") {
             table->Initialize(CurrentHashSize);
+            board = Board(DEFAULT_POS); // Reset the board
             continue;
-
         } else if (token == "uci") {
             IsUci = true;
             uci_send_id();
             continue;
-
         }
 
         /* Handle UCI position command */
@@ -80,7 +74,7 @@ void uci_loop(int argv, char **argc) {
             std::string option;
             is >> std::skipws >> option;
             if (option == "startpos") {
-                // searchThread->applyFen(DEFAULT_POS);
+                board = Board(DEFAULT_POS);
             } else if (option == "fen") {
                 std::string final_fen;
                 is >> std::skipws >> option;
@@ -101,7 +95,7 @@ void uci_loop(int argv, char **argc) {
                 is >> std::skipws >> option;
                 final_fen += option;
 
-                // record fifty move conter
+                // record fifty move counter
                 final_fen.push_back(' ');
                 is >> std::skipws >> option;
                 final_fen += option;
@@ -110,15 +104,19 @@ void uci_loop(int argv, char **argc) {
                 is >> std::skipws >> option;
                 final_fen += option;
 
-                // Finally, apply the fen.
-                // searchThread->applyFen(final_fen);
+                // Apply the FEN
+                board = Board(final_fen);
             }
+            
             is >> std::skipws >> option;
             if (option == "moves") {
                 std::string moveString;
 
                 while (is >> moveString) {
-                    // searchThread->makeMove(moveString);
+                    Move move = convertUciToMove(board, moveString);
+                    if (move != NO_MOVE) {
+                        board.makeMove( move);
+                    }
                 }
             }
             continue;
@@ -129,18 +127,17 @@ void uci_loop(int argv, char **argc) {
             is >> std::skipws >> token;
 
             // Initialize variables
-            int depth = -1;
+            int depth = default_depth; // Default to depth 4 if not specified
 
             uint64_t nodes = -1;
 
             while (token != "none") {
                 if (token == "infinite") {
-                    depth = -1;
+                    depth = 6; // Use depth 6 for infinite (can be adjusted)
                     break;
                 }
                 if (token == "movestogo") {
                     is >> std::skipws >> token;
-                    // searchThread->tm.movestogo = stoi(token);
                     is >> std::skipws >> token;
                     continue;
                 }
@@ -153,95 +150,73 @@ void uci_loop(int argv, char **argc) {
                     continue;
                 }
 
-                // Time
-                if (token == "wtime") {
+                // Time management (simplified - we ignore time controls for now)
+                if (token == "wtime" || token == "btime" || token == "winc" || token == "binc" || token == "movetime") {
                     is >> std::skipws >> token;
-                    // searchThread->tm.wtime = std::stod(token);
-                    is >> std::skipws >> token;
-                    continue;
-                }
-                if (token == "btime") {
-                    is >> std::skipws >> token;
-                    // searchThread->tm.btime = std::stod(token);
                     is >> std::skipws >> token;
                     continue;
                 }
-
-                // Increment
-                if (token == "winc") {
-                    is >> std::skipws >> token;
-                    // searchThread->tm.winc = std::stod(token);
-                    is >> std::skipws >> token;
-                    continue;
-                }
-                if (token == "binc") {
-                    is >> std::skipws >> token;
-                    // searchThread->tm.binc = std::stod(token);
-                    is >> std::skipws >> token;
-                    continue;
-                }
-
-                if (token == "movetime") {
-                    is >> std::skipws >> token;
-                    // searchThread->tm.movetime = stod(token);
-                    is >> std::skipws >> token;
-                    continue;
-                }
+                
                 if (token == "nodes") {
                     is >> std::skipws >> token;
                     nodes = stoi(token);
                     is >> std::skipws >> token;
                 }
+                
                 token = "none";
             }
 
-            if (nodes != -1) {
-                // info.nodes = nodes;
-                // info.nodeset = true;
+            // Start search for best move
+            auto start_time = std::chrono::high_resolution_clock::now();
+
+            // Perform the search with proper error handling
+            Move bestMove = NO_MOVE;
+            try {
+                bestMove = getBestMove(board, depth);
+            } catch (const std::exception& e) {
+                std::cerr << "Error during search: " << e.what() << std::endl;
+                bestMove = NO_MOVE;
+            } catch (...) {
+                std::cerr << "Unknown error during search" << std::endl;
+                bestMove = NO_MOVE;
             }
 
-            // info.depth = depth;
-            // if (searchThread->tm.wtime != -1 || searchThread->tm.btime != -1 || searchThread->tm.movetime != -1) {
-                // info.timeset = true;
-            // }
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-            // if (depth == -1) {
-                // info.depth = MAXPLY;
-            // }
-
-            // info.stopped = false;
-            // info.uci = IsUci;
-
-            // threadHandle.start(*searchThread);
+            // Output the best move
+            if (bestMove != NO_MOVE) {
+                std::cout << "info depth " << depth << " time " << duration << " nodes 0 score cp 0" << std::endl;
+                std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
+            } else {
+                std::cout << "bestmove (none)" << std::endl;
+            }
         }
 
         else if (token == "setoption") {
-        
+            is >> std::skipws >> token;
+            if (token == "name") {
+                is >> std::skipws >> token;
+                if (token == "Hash") {
+                    is >> std::skipws >> token; // Skip "value"
+                    is >> std::skipws >> token;
+                    CurrentHashSize = std::stoi(token);
+                    table->Initialize(CurrentHashSize);
+                }
+            }
         }
 
         /* Debugging Commands */
         else if (token == "print") {
-            // std::cout << searchThread->board << std::endl;
+            std::cout << board << std::endl;
             continue;
         } else if (token == "eval") {
-            
-            // std::cout << "Eval: " << evaluate(*searchThread) << std::endl;
-
-        } else if (token == "repetition") {
-
-            // std::cout << searchThread->board.isRepetition() << std::endl;
-
+            std::cout << "Eval: " << evaluate(board) << std::endl;
         } else if (token == "side") {
-
-            // std::cout << (searchThread->board.sideToMove == White ? "White" : "Black") << std::endl;
-
+            std::cout << (board.sideToMove == White ? "White" : "Black") << std::endl;
         }
     }
 
     table->clear();
-
     std::cout << std::endl;
-    // if (!info.uci) {
-    //     std::cout << "\u001b[0m";
-    // }
 }
