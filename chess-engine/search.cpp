@@ -2,35 +2,7 @@
 #include "types.h"
 #include <algorithm>
 
-// Piece values for evaluation
-const int PAWN_VALUE = 100;
-const int KNIGHT_VALUE = 320;
-const int BISHOP_VALUE = 330;
-const int ROOK_VALUE = 500;
-const int QUEEN_VALUE = 900;
 
-// Simple evaluation function - just counts material
-int evaluate(const Board &board)
-{
-   int score = 0;
-
-   // Material count for White
-   score += popcount(board.pieces(PAWN, White)) * PAWN_VALUE;
-   score += popcount(board.pieces(KNIGHT, White)) * KNIGHT_VALUE;
-   score += popcount(board.pieces(BISHOP, White)) * BISHOP_VALUE;
-   score += popcount(board.pieces(ROOK, White)) * ROOK_VALUE;
-   score += popcount(board.pieces(QUEEN, White)) * QUEEN_VALUE;
-
-   // Material count for Black
-   score -= popcount(board.pieces(PAWN, Black)) * PAWN_VALUE;
-   score -= popcount(board.pieces(KNIGHT, Black)) * KNIGHT_VALUE;
-   score -= popcount(board.pieces(BISHOP, Black)) * BISHOP_VALUE;
-   score -= popcount(board.pieces(ROOK, Black)) * ROOK_VALUE;
-   score -= popcount(board.pieces(QUEEN, Black)) * QUEEN_VALUE;
-
-   // Return score from the perspective of the side to move
-   return board.sideToMove == White ? score : -score;
-}
 
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta)
@@ -67,6 +39,10 @@ int negamax(Board &board, int depth, int alpha, int beta)
          return 0;
       }
    }
+
+   scoreMoves(moves, board, depth);
+
+   std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
    int bestScore = -INF_BOUND;
 

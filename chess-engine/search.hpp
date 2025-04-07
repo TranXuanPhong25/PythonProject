@@ -2,7 +2,8 @@
 
 #include "chess.hpp"
 #include "types.h"
-
+#include "evaluate.hpp"
+#include "score_move.hpp"
 using namespace Chess;
 
 // Simple evaluation function - just counts material
