@@ -192,7 +192,6 @@ void uci_loop(int argv, char **argc) {
                 std::cout << "bestmove (none)" << std::endl;
             }
         }
-
         else if (token == "setoption") {
             is >> std::skipws >> token;
             if (token == "name") {
