@@ -851,7 +851,9 @@ static constexpr U64 castlingKey[16] = {0,
    public:
       /// @brief constructor for the board, loads startpos and initializes SQUARES_BETWEEN_BB array
       Board(std::string fen);
-
+      const std::vector<State>& getStateHistory() const { return stateHistory; }
+      void addStateHistory(const State &state) { stateHistory.emplace_back(state); }
+      void popStateHistory() { stateHistory.pop_back(); }
       /// @brief Finds what piece is on the square using bitboards (slow)
       /// @param sq
       /// @return found piece otherwise None
@@ -949,7 +951,9 @@ static constexpr U64 castlingKey[16] = {0,
       U64 updateKeyPiece(Piece piece, Square sq) const;
 
       friend inline std::ostream &operator<<(std::ostream &os, const Board &b);
-
+      // TODO: look at this, maybe produce error
+      void removeCastlingRightsAll(Color c);
+      void removeCastlingRightsRook(Square sq);
    private:
       /// @brief calculate the current zobrist hash from scratch
       /// @return
@@ -964,8 +968,8 @@ static constexpr U64 castlingKey[16] = {0,
       U64 updateKeyEnPassant(Square sq) const;
       U64 updateKeySideToMove() const;
 
-      void removeCastlingRightsAll(Color c);
-      void removeCastlingRightsRook(Square sq);
+      // void removeCastlingRightsAll(Color c);
+      // void removeCastlingRightsRook(Square sq);
    };
 
    inline Piece Board::pieceAtBB(Square sq)
