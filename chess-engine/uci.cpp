@@ -171,7 +171,7 @@ void uci_loop(int argv, char **argc) {
             // Perform the search with proper error handling
             Move bestMove = NO_MOVE;
             try {
-                bestMove = getBestMove(board, depth);
+                bestMove = getBestMove(board, depth,table);
             } catch (const std::exception& e) {
                 std::cerr << "Error during search: " << e.what() << std::endl;
                 bestMove = NO_MOVE;
