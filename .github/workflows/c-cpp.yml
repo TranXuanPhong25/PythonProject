@@ -13,6 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: /chess-engine/make
-      run: /chess-engine/make
+    - name: /chess-engine
+      run: cd chess-engine
+    - name: make
+      run: make
 
