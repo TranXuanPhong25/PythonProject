@@ -45,7 +45,6 @@ void uci_loop(int argv, char **argc) {
 
     std::string command;
     std::string token;
-
     while (std::getline(std::cin, command)) {
         std::istringstream is(command);
 
@@ -192,7 +191,6 @@ void uci_loop(int argv, char **argc) {
                 std::cout << "bestmove (none)" << std::endl;
             }
         }
-
         else if (token == "setoption") {
             is >> std::skipws >> token;
             if (token == "name") {

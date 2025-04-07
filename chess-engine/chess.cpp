@@ -1,6 +1,5 @@
 #include "types.h"
 
-//Initialize FEN board
 Board::Board(std::string fen) {
     initializeLookupTables();
     stateHistory.reserve(MAX_PLY);
@@ -22,7 +21,6 @@ Board::Board(std::string fen) {
     std::fill(std::begin(board), std::end(board), None);
 
     applyFen(fen);
-
     occEnemy = Enemy(sideToMove);
     occUs = Us(sideToMove);
     occAll = All();
@@ -99,7 +97,6 @@ void Board::applyFen(const std::string &fen) {
 
     hashHistory.push_back(hashKey);
     pawnKeyHistory.push_back(pawnKey);
-
 }
 
 
@@ -125,9 +122,6 @@ void Board::makeMove(Move move) {
     stateHistory.emplace_back(State(enPassantSquare, castlingRights, halfMoveClock, capture));
     pawnKeyHistory.emplace_back(pawnKey);
 
-    // if constexpr (updateNNUE) {
-    //     nnue.push();
-    // }
 
     halfMoveClock++;
     fullMoveNumber++;
@@ -145,8 +139,6 @@ void Board::makeMove(Move move) {
 
     hashKey ^= updateKeyCastling();
 
-    const Square kSQ_White = lsb(pieces<KING, White>());
-    const Square kSQ_Black = lsb(pieces<KING, Black>());
 
     if (isCastling) {
         Piece rook = sideToMove == White ? WhiteRook : BlackRook;
@@ -214,27 +206,19 @@ void Board::makeMove(Move move) {
         Square rookToSq = file_rank_square(to_sq > from_sq ? FILE_F : FILE_D, square_rank(from_sq));
         Square kingToSq = file_rank_square(to_sq > from_sq ? FILE_G : FILE_C, square_rank(from_sq));
 
-        // if (updateNNUE && (NNUE::KING_BUCKET[from_sq ^ (static_cast<bool>(sideToMove) * 56)] != NNUE::KING_BUCKET[kingToSq ^ (static_cast<bool>(sideToMove) * 56)] ||
-        //     square_file(from_sq) + square_file(kingToSq) == 7)) {
-        //     removePiece(p, from_sq);
-        //     removePiece(rook, to_sq);
+        
+            removePiece(p, from_sq);
+            removePiece(rook, to_sq);
 
-        //     placePiece(p, kingToSq);
-        //     placePiece(rook, rookToSq);
+            placePiece(p, kingToSq);
+            placePiece(rook, rookToSq);
 
-        //     refresh(nnue);
-        // } else {
-        //     removePiece<updateNNUE>(p, from_sq, kSQ_White, kSQ_Black, nnue);
-        //     removePiece<updateNNUE>(rook, to_sq, kSQ_White, kSQ_Black, nnue);
-
-        //     placePiece<updateNNUE>(p, kingToSq, kSQ_White, kSQ_Black, nnue);
-        //     placePiece<updateNNUE>(rook, rookToSq, kSQ_White, kSQ_Black, nnue);
-        // }
+    
 
     } else if (pt == PAWN && ep) {
         assert(pieceAtB(Square(to_sq ^ 8)) != None);
 
-        // removePiece<updateNNUE>(makePiece(PAWN, ~sideToMove), Square(to_sq ^ 8), kSQ_White, kSQ_Black, nnue);
+        removePiece(makePiece(PAWN, ~sideToMove), Square(to_sq ^ 8));
 
     } else if (capture != None && !isCastling) {
         assert(pieceAtB(to_sq) != None);
@@ -243,19 +227,19 @@ void Board::makeMove(Move move) {
             pawnKey ^= updateKeyPiece(capture, to_sq);
         }
 
-        // removePiece<updateNNUE>(capture, to_sq, kSQ_White, kSQ_Black, nnue);
+        removePiece(capture, to_sq);
     }
 
     if (promoted(move)) {
         assert(pieceAtB(to_sq) == None);
 
-        // removePiece<updateNNUE>(makePiece(PAWN, sideToMove), from_sq, kSQ_White, kSQ_Black, nnue);
-        // placePiece<updateNNUE>(p, to_sq, kSQ_White, kSQ_Black, nnue);
+        removePiece(makePiece(PAWN, sideToMove), from_sq);
+        placePiece(p, to_sq);
 
     } else if (!isCastling) {
         assert(pieceAtB(to_sq) == None);
 
-        // movePiece<updateNNUE>(p, from_sq, to_sq, kSQ_White, kSQ_Black, nnue);
+        movePiece(p, from_sq, to_sq);
     }
 
     sideToMove = ~sideToMove;
@@ -272,9 +256,7 @@ void Board::unmakeMove(Move move) {
     pawnKey = pawnKeyHistory.back();
     pawnKeyHistory.pop_back();
 
-    // if constexpr (updateNNUE) {
-    //     nnue.pull();
-    // }
+  
 
     enPassantSquare = restore.enPassant;
     castlingRights = restore.castling;
@@ -368,4 +350,3 @@ void Board::movePiece(Piece piece, Square fromSq, Square toSq) {
     board[fromSq] = None;
     board[toSq] = piece;
 }
-

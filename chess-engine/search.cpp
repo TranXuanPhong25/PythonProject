@@ -2,38 +2,10 @@
 #include "types.h"
 #include <algorithm>
 
-// Piece values for evaluation
-const int PAWN_VALUE = 100;
-const int KNIGHT_VALUE = 320;
-const int BISHOP_VALUE = 330;
-const int ROOK_VALUE = 500;
-const int QUEEN_VALUE = 900;
 
-// Simple evaluation function - just counts material
-int evaluate(const Board &board)
-{
-   int score = 0;
-
-   // Material count for White
-   score += popcount(board.pieces(PAWN, White)) * PAWN_VALUE;
-   score += popcount(board.pieces(KNIGHT, White)) * KNIGHT_VALUE;
-   score += popcount(board.pieces(BISHOP, White)) * BISHOP_VALUE;
-   score += popcount(board.pieces(ROOK, White)) * ROOK_VALUE;
-   score += popcount(board.pieces(QUEEN, White)) * QUEEN_VALUE;
-
-   // Material count for Black
-   score -= popcount(board.pieces(PAWN, Black)) * PAWN_VALUE;
-   score -= popcount(board.pieces(KNIGHT, Black)) * KNIGHT_VALUE;
-   score -= popcount(board.pieces(BISHOP, Black)) * BISHOP_VALUE;
-   score -= popcount(board.pieces(ROOK, Black)) * ROOK_VALUE;
-   score -= popcount(board.pieces(QUEEN, Black)) * QUEEN_VALUE;
-
-   // Return score from the perspective of the side to move
-   return board.sideToMove == White ? score : -score;
-}
 
 // Minimax search with alpha-beta pruning
-int alphaBeta(Board &board, int depth, int alpha, int beta)
+int negamax(Board &board, int depth, int alpha, int beta)
 {
    if (depth == 0)
    {
@@ -50,10 +22,10 @@ int alphaBeta(Board &board, int depth, int alpha, int beta)
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
 
-   if (moves.size == 0)
+   if (static_cast<int>(moves.size) == 0)
    {
       // Check for checkmate or stalemate
-      std::cout << "Check for checkmate or stalemate\n";
+      // std::cout << "Check for checkmate or stalemate\n";
       bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
 
       if (inCheck)
@@ -67,40 +39,28 @@ int alphaBeta(Board &board, int depth, int alpha, int beta)
          return 0;
       }
    }
-   if (board.sideToMove == White)
-   {
-      int maxEval = mated_in(0);
-      for (int i = 0; i < moves.size; i++)
-      {
-         Move move = moves[i].move;
-         board.makeMove(move);
-         int eval = alphaBeta(board, depth - 1, alpha, beta);
-         board.unmakeMove(move);
 
-         maxEval = std::max(maxEval, eval);
-         if (beta <= maxEval)
-            break; // Beta cutoff
-         alpha = std::max(alpha, maxEval);
-      }
-      return maxEval;
-   }
-   else
-   {
-      int minEval = mate_in(0);
-      for (int i = 0; i < moves.size; i++)
-      {
-         Move move = moves[i].move;
-         board.makeMove(move);
-         int eval = alphaBeta(board, depth - 1, alpha, beta);
-         board.unmakeMove(move);
+   scoreMoves(moves, board, depth);
 
-         minEval = std::min(minEval, eval);
-         if (minEval <= alpha)
-            break; // Alpha cutoff
-         beta = std::min(beta, minEval);
-      }
-      return minEval;
+   std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+
+   int bestScore = -INF_BOUND;
+
+   for (int i = 0; i < moves.size; i++)
+   {
+      Move move = moves[i].move;
+      board.makeMove(move);
+      // Negamax recursively calls with inverted bounds
+      int score = -negamax(board, depth - 1, -beta, -alpha);
+      board.unmakeMove(move);
+
+      bestScore = std::max(bestScore, score);
+      alpha = std::max(alpha, score);
+      
+      if (alpha >= beta)
+         break; // Beta cutoff
    }
+   return bestScore;
 }
 
 // Find the best move at the given depth
@@ -122,22 +82,21 @@ Move getBestMove(Board &board, int depth)
    }
 
    Move bestMove = moves[0].move;
-   int bestScore = board.sideToMove == White ? mated_in(0) : mate_in(0);
-
+   int bestScore = -INF_BOUND;
+   int alpha = -INF_BOUND;
+   int beta = INF_BOUND;
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
       board.makeMove(move);
-      int score = alphaBeta(board, depth - 1, mated_in(0), mate_in(0));
-      // random score
-      // int score = rand() % 1000 - 500;
+      int score = -negamax(board, depth - 1, -beta, -alpha);
       board.unmakeMove(move);
 
-      if ((board.sideToMove == White && score > bestScore) ||
-          (board.sideToMove == Black && score < bestScore))
+      if (score > bestScore)
       {
          bestScore = score;
          bestMove = move;
+         alpha = std::max(alpha, score);
       }
    }
 
