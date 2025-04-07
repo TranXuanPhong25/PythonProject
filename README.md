@@ -1,5 +1,10 @@
-Have to create .env file with your path
+Have to create .env first
 ```terminal
   AI_TIME_LIMIT=10
-  ENGINE_PATH=YOUR_STOCKFISH_ENGINE_PATH
+  ENGINE_PATH=/chess-engine/bin/uci
+```
+then run following command
+```terminal
+  cd chess-engine
+  make
 ```
