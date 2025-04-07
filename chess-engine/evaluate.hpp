@@ -2,12 +2,13 @@
 #include "chess.hpp"
 #include "types.h"
 // Piece values for evaluation
-const int PAWN_VALUE = 100;
-const int KNIGHT_VALUE = 320;
-const int BISHOP_VALUE = 330;
-const int ROOK_VALUE = 500;
-const int QUEEN_VALUE = 900;
-const int KING_VALUE = 20000; // High value for king, not used in material counting
+constexpr int PAWN_VALUE = 100;
+constexpr int KNIGHT_VALUE = 320;
+constexpr int BISHOP_VALUE = 330;
+constexpr int ROOK_VALUE = 500;
+constexpr int QUEEN_VALUE = 900;
+constexpr int KING_VALUE = 20000; // High value for king, not used in material counting
+constexpr int totalMaterial = 8000; // Total material value for game phase calculation
 
 const int PIECE_VALUES[6] = {
     PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, KING_VALUE};

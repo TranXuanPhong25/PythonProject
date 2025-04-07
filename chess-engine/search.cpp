@@ -60,7 +60,7 @@ int negamax(Board &board, int depth, int alpha, int beta)
       if (alpha >= beta)
          break; // Beta cutoff
    }
-   
+   std::cout<< board<<std::endl;
    return bestScore;
 }
 
@@ -91,6 +91,7 @@ Move getBestMove(Board &board, int depth)
       Move move = moves[i].move;
       board.makeMove(move);
       int score = -negamax(board, depth - 1, -beta, -alpha);
+
       board.unmakeMove(move);
 
       if (score > bestScore)

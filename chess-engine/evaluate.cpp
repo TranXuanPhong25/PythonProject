@@ -15,13 +15,6 @@ inline int getFlippedSquare(Square sq)
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
 inline float getGamePhase(const Board &board)
 {
-   const int totalMaterial =
-       16 * PAWN_VALUE +
-       4 * KNIGHT_VALUE +
-       4 * BISHOP_VALUE +
-       4 * ROOK_VALUE +
-       2 * QUEEN_VALUE;
-
    int remainingMaterial =
        popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
        popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KNIGHT_VALUE +
@@ -50,7 +43,6 @@ int evaluate(const Board &board)
 
       // Material value
       int pieceValue = PIECE_VALUES[pt];
-      
       // Apply material value
       if (color == White)
          score += pieceValue;
@@ -59,7 +51,8 @@ int evaluate(const Board &board)
 
       // Piece-square table bonuses
       int pstBonus = 0;
-      int pstIndex = (color == White) ? squareToIndex(sq) : getFlippedSquare(sq);
+      // int pstIndex = (color == White) ? sq : getFlippedSquare(sq);
+      int pstIndex = sq;
 
       switch (pt)
       {
