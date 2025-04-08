@@ -1,5 +1,5 @@
-#include "types.h"
-
+#include "types.hpp"
+#include "chess.hpp"
 Board::Board(std::string fen) {
     initializeLookupTables();
     stateHistory.reserve(MAX_PLY);

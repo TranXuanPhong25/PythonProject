@@ -1,5 +1,5 @@
 #include "search.hpp"
-#include "types.h"
+
 #include <algorithm>
 
 // Minimax search with alpha-beta pruning

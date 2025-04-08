@@ -1,14 +1,7 @@
-#include "uci.h"
-#include "search.hpp"
-#include "tt.h"
-#include "types.h"
+#include "uci.hpp"
 
-#include <chrono>
-#include <iostream>
-#include <sstream>
-#include <bits/unique_ptr.h>
-
-static void uci_send_id() {
+static void uci_send_id()
+{
     std::cout << "id name " << NAME << std::endl;
     std::cout << "id author " << AUTHOR << std::endl;
     std::cout << "option name Hash type spin default 64 min 4 max " << MAXHASH << std::endl;
@@ -16,8 +9,10 @@ static void uci_send_id() {
     std::cout << "uciok" << std::endl;
 }
 
-static void set_option(std::istream &is, std::string &token, std::string name, int &value) {
-    if (token == name) {
+static void set_option(std::istream &is, std::string &token, std::string name, int &value)
+{
+    if (token == name)
+    {
         is >> std::skipws >> token;
         is >> std::skipws >> token;
         value = std::stoi(token);
@@ -32,7 +27,8 @@ bool IsUci = false;
 
 TranspositionTable *table;
 
-void uci_loop(int argv, char **argc) {
+void uci_loop(int argv, char **argc)
+{
     std::cout << "Chess Engine Copyright (C) 2023" << std::endl;
 
     auto ttable = std::make_unique<TranspositionTable>();
@@ -45,36 +41,49 @@ void uci_loop(int argv, char **argc) {
 
     std::string command;
     std::string token;
-    while (std::getline(std::cin, command)) {
+    while (std::getline(std::cin, command))
+    {
         std::istringstream is(command);
 
         token.clear();
         is >> std::skipws >> token;
 
-        if (token == "stop") {
+        if (token == "stop")
+        {
             // For a simple non-threaded implementation, this does nothing
-        } else if (token == "quit") {
+        }
+        else if (token == "quit")
+        {
             break;
-        } else if (token == "isready") {
+        }
+        else if (token == "isready")
+        {
             std::cout << "readyok" << std::endl;
             continue;
-        } else if (token == "ucinewgame") {
+        }
+        else if (token == "ucinewgame")
+        {
             table->Initialize(CurrentHashSize);
             board = Board(DEFAULT_POS); // Reset the board
             continue;
-        } else if (token == "uci") {
+        }
+        else if (token == "uci")
+        {
             IsUci = true;
             uci_send_id();
             continue;
         }
-
         /* Handle UCI position command */
-        else if (token == "position") {
+        else if (token == "position")
+        {
             std::string option;
             is >> std::skipws >> option;
-            if (option == "startpos") {
+            if (option == "startpos")
+            {
                 board = Board(DEFAULT_POS);
-            } else if (option == "fen") {
+            }
+            else if (option == "fen")
+            {
                 std::string final_fen;
                 is >> std::skipws >> option;
                 final_fen = option;
@@ -106,23 +115,26 @@ void uci_loop(int argv, char **argc) {
                 // Apply the FEN
                 board = Board(final_fen);
             }
-            
+
             is >> std::skipws >> option;
-            if (option == "moves") {
+            if (option == "moves")
+            {
                 std::string moveString;
 
-                while (is >> moveString) {
+                while (is >> moveString)
+                {
                     Move move = convertUciToMove(board, moveString);
-                    if (move != NO_MOVE) {
-                        board.makeMove( move);
+                    if (move != NO_MOVE)
+                    {
+                        board.makeMove(move);
                     }
                 }
             }
             continue;
         }
-
         /* Handle UCI go command */
-        else if (token == "go") {
+        else if (token == "go")
+        {
             is >> std::skipws >> token;
 
             // Initialize variables
@@ -130,19 +142,23 @@ void uci_loop(int argv, char **argc) {
 
             uint64_t nodes = -1;
 
-            while (token != "none") {
-                if (token == "infinite") {
+            while (token != "none")
+            {
+                if (token == "infinite")
+                {
                     depth = 6; // Use depth 6 for infinite (can be adjusted)
                     break;
                 }
-                if (token == "movestogo") {
+                if (token == "movestogo")
+                {
                     is >> std::skipws >> token;
                     is >> std::skipws >> token;
                     continue;
                 }
 
                 // Depth
-                if (token == "depth") {
+                if (token == "depth")
+                {
                     is >> std::skipws >> token;
                     depth = std::stoi(token);
                     is >> std::skipws >> token;
@@ -150,18 +166,20 @@ void uci_loop(int argv, char **argc) {
                 }
 
                 // Time management (simplified - we ignore time controls for now)
-                if (token == "wtime" || token == "btime" || token == "winc" || token == "binc" || token == "movetime") {
+                if (token == "wtime" || token == "btime" || token == "winc" || token == "binc" || token == "movetime")
+                {
                     is >> std::skipws >> token;
                     is >> std::skipws >> token;
                     continue;
                 }
-                
-                if (token == "nodes") {
+
+                if (token == "nodes")
+                {
                     is >> std::skipws >> token;
                     nodes = stoi(token);
                     is >> std::skipws >> token;
                 }
-                
+
                 token = "none";
             }
 
@@ -170,12 +188,17 @@ void uci_loop(int argv, char **argc) {
 
             // Perform the search with proper error handling
             Move bestMove = NO_MOVE;
-            try {
-                bestMove = getBestMove(board, depth,table);
-            } catch (const std::exception& e) {
+            try
+            {
+                bestMove = getBestMove(board, depth, table);
+            }
+            catch (const std::exception &e)
+            {
                 std::cerr << "Error during search: " << e.what() << std::endl;
                 bestMove = NO_MOVE;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 std::cerr << "Unknown error during search" << std::endl;
                 bestMove = NO_MOVE;
             }
@@ -184,18 +207,24 @@ void uci_loop(int argv, char **argc) {
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
             // Output the best move
-            if (bestMove != NO_MOVE) {
+            if (bestMove != NO_MOVE)
+            {
                 std::cout << "info depth " << depth << " time " << duration << " nodes 0 score cp 0" << std::endl;
                 std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
-            } else {
+            }
+            else
+            {
                 std::cout << "bestmove (none)" << std::endl;
             }
         }
-        else if (token == "setoption") {
+        else if (token == "setoption")
+        {
             is >> std::skipws >> token;
-            if (token == "name") {
+            if (token == "name")
+            {
                 is >> std::skipws >> token;
-                if (token == "Hash") {
+                if (token == "Hash")
+                {
                     is >> std::skipws >> token; // Skip "value"
                     is >> std::skipws >> token;
                     CurrentHashSize = std::stoi(token);
@@ -203,14 +232,18 @@ void uci_loop(int argv, char **argc) {
                 }
             }
         }
-
         /* Debugging Commands */
-        else if (token == "print") {
+        else if (token == "print")
+        {
             std::cout << board << std::endl;
             continue;
-        } else if (token == "eval") {
+        }
+        else if (token == "eval")
+        {
             std::cout << "Eval: " << evaluate(board) << std::endl;
-        } else if (token == "side") {
+        }
+        else if (token == "side")
+        {
             std::cout << (board.sideToMove == White ? "White" : "Black") << std::endl;
         }
     }

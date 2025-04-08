@@ -1,6 +1,6 @@
 #pragma once
 #include "chess.hpp"
-#include "types.h"
+#include "types.hpp"
 
 constexpr int mvv_lva[12][12] = {
    105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605, 104, 204, 304,

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "chess.hpp"
-#include "types.h"
+#include "types.hpp"
 #include "evaluate.hpp"
 #include "score_move.hpp"
-#include "tt.h"
+#include "tt.hpp"
 using namespace Chess;
 
 // Simple evaluation function - just counts material

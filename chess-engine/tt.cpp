@@ -1,4 +1,4 @@
-#include "tt.h"
+#include "tt.hpp"
 
 void TranspositionTable::Initialize(int MB)
 {
