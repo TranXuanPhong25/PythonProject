@@ -1,0 +1,22 @@
+name: C/C++ CI benchmarking
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Change Directory to chess-engine
+      run: cd chess-engine
+    - name: Verify Makefile
+      run: test -f chess-engine/Makefile
+    - name: Run Make bench
+      run: make -C chess-engine bench
+    - name: run bench
+      run: bash -c "./bench"
