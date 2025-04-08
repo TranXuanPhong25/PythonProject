@@ -37,7 +37,41 @@ for piece in pieces:
         piece_images[piece] = pygame.transform.scale(
             pygame.image.load(f'assets/white/{piece}.png'), (SQUARE_SIZE, SQUARE_SIZE)
         )
-
+def get_promotion_choice(screen):
+    """Display a UI for selecting promotion piece"""
+    pieces = ["q", "r", "n", "b"]  # Queen, rook, knight, bishop
+    
+    # Draw background
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 128))  # Semi-transparent black
+    screen.blit(overlay, (0, 0))
+    
+    # Draw promotion options
+    option_width = SQUARE_SIZE * 2
+    option_height = SQUARE_SIZE
+    option_rect = []
+    
+    title = FONT.render("Choose promotion piece:", True, (255, 255, 255))
+    screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//3 - 40))
+    
+    for i, piece in enumerate(pieces):
+        rect = pygame.Rect(WIDTH//2 - option_width*2 + i*option_width, HEIGHT//3, 
+                          option_width, option_height)
+        option_rect.append(rect)
+        
+        pygame.draw.rect(screen, (200, 200, 200), rect)
+        screen.blit(piece_images[piece.upper()], 
+                   (rect.x + option_width//2 - SQUARE_SIZE//2, rect.y))
+    
+    pygame.display.flip()
+    
+    # Wait for selection
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                for i, rect in enumerate(option_rect):
+                    if rect.collidepoint(event.pos):
+                        return pieces[i]
 
 # Hàm vẽ bàn cờ
 def draw_board(screen, board, selected_square, player_time, ai_time, depth):
@@ -166,8 +200,35 @@ while running:
                     if piece and piece.color == chess.WHITE:
                         selected_square = square
                 else:
-                    # Thử di chuyển quân cờ
-                    move = chess.Move(selected_square, square)
+                    # Check if this is potentially a pawn promotion move
+                    piece = board.piece_at(selected_square)
+                    is_promotion = False
+
+                    if piece and piece.piece_type == chess.PAWN:
+                        # Check if white pawn is moving to 8th rank (promotion)
+                        if chess.square_rank(square) == 7:
+                            is_promotion = True
+
+                    if is_promotion:
+                        # Get promotion piece choice from player
+                        promotion_choice = get_promotion_choice(screen)
+                        
+                        # Map the promotion choice to the correct chess piece type
+                        promotion_piece = None
+                        if promotion_choice == 'q':
+                            promotion_piece = chess.QUEEN
+                        elif promotion_choice == 'r':
+                            promotion_piece = chess.ROOK
+                        elif promotion_choice == 'b':
+                            promotion_piece = chess.BISHOP
+                        elif promotion_choice == 'n':
+                            promotion_piece = chess.KNIGHT
+                            
+                        move = chess.Move(selected_square, square, promotion=promotion_piece)
+                    else:
+                        # Normal move
+                        move = chess.Move(selected_square, square)
+
                     if move in board.legal_moves:
                         board.push(move)
                         player_time = time.time() - start_time  # Đo thời gian người chơi
