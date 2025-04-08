@@ -9,7 +9,7 @@ BIN_DIR = bin
 
 # Source files
 SRCS = $(wildcard *.cpp)
-OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRCS))
+OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(filter-out bench.cpp,$(SRCS)))
 
 
 # Target executable
