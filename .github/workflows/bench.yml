@@ -19,4 +19,4 @@ jobs:
     - name: Run Make bench
       run: make -C chess-engine bench
     - name: run bench
-      run: ./bench
+      run: ./chess-engine/bench
