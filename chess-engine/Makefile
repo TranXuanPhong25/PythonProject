@@ -11,6 +11,7 @@ BIN_DIR = bin
 SRCS = $(wildcard *.cpp)
 OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 
+
 # Target executable
 TARGET = $(BIN_DIR)/uci.exe
 
@@ -20,6 +21,8 @@ TARGET = $(BIN_DIR)/uci.exe
 # Default target
 all: dirs $(TARGET)
 
+bench: evaluate.cpp search.cpp tt.cpp chess.cpp score_move.cpp 
+
 # Create directories
 dirs:
 	@mkdir -p $(BUILD_DIR)
@@ -28,6 +31,8 @@ dirs:
 # Link object files to create executable
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@
+
+
 
 # Compile source files into object files
 $(BUILD_DIR)/%.o: %.cpp
@@ -41,3 +46,4 @@ clean:
 debug:
 	@echo "Source files: $(SRCS)"
 	@echo "Object files: $(OBJS)"
+#make bench
