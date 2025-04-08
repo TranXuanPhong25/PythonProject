@@ -8,6 +8,9 @@ then run following command
   cd chess-engine
   make
 ```
+Benchmark:
+  make bench
+  ./bench
 
 Implemented
 Chess representation and movegen
