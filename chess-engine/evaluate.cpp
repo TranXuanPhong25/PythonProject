@@ -1,4 +1,5 @@
 #include "evaluate.hpp"
+#include "types.hpp"
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
 inline int squareToIndex(Square sq)
@@ -31,60 +32,45 @@ int evaluate(const Board &board)
    int score = 0;
    float endgameWeight = getGamePhase(board);
 
-   // Material counting
-   for (Square sq = SQ_A1; sq <= SQ_H8; ++sq)
+   
+   // Material counting using bitboards for efficiency
+   for (PieceType pt = PAWN; pt <= KING; ++pt)
    {
-      Piece piece = board.pieceAtB(sq);
-      if (piece == None)
-         continue;
+      Bitboard whitePieces = board.pieces(pt, White);
+      Bitboard blackPieces = board.pieces(pt, Black);
 
-      PieceType pt = type_of_piece(piece);
-      Color color = (piece >= BlackPawn) ? Black : (piece == None ? NO_COLOR : White);
-
-      // Material value
-      int pieceValue = PIECE_VALUES[pt];
-      // Apply material value
-      if (color == White)
-         score += pieceValue;
-      else
-         score -= pieceValue;
-
-      // Piece-square table bonuses
-      int pstBonus = 0;
-      // int pstIndex = (color == White) ? sq : getFlippedSquare(sq);
-      int pstIndex = sq;
-
-      switch (pt)
+      // Process white pieces
+      while (whitePieces)
       {
-      case PAWN:
-         pstBonus = PAWN_PST[pstIndex];
-         break;
-      case KNIGHT:
-         pstBonus = KNIGHT_PST[pstIndex];
-         break;
-      case BISHOP:
-         pstBonus = BISHOP_PST[pstIndex];
-         break;
-      case ROOK:
-         pstBonus = ROOK_PST[pstIndex];
-         break;
-      case QUEEN:
-         pstBonus = QUEEN_PST[pstIndex];
-         break;
-      case KING:
-         // Interpolate between middlegame and endgame king tables
-         pstBonus = KING_MG_PST[pstIndex] * (1.0f - endgameWeight) +
-                    KING_EG_PST[pstIndex] * endgameWeight;
-         break;
-      default:
-         break;
+         Square sq = static_cast<Square>(pop_lsb(whitePieces)); // Get and remove the least significant bit
+         score += PIECE_VALUES[pt];        // Add material value
+         if (pt == KING)
+         {
+            // Interpolate between middlegame and endgame king tables
+            score += KING_MG_PST[sq] * (1.0f - endgameWeight) + KING_EG_PST[sq] * endgameWeight;
+         }
+         else
+         {
+            score += PAWN_PST[sq]; // Add piece-square table bonus
+         }
       }
 
-      // Apply piece-square table bonus
-      if (color == White)
-         score += pstBonus;
-      else
-         score -= pstBonus;
+      // Process black pieces
+      while (blackPieces)
+      {
+         Square sq = static_cast<Square>(pop_lsb(blackPieces)); // Get and remove the least significant bit
+         score -= PIECE_VALUES[pt];        // Subtract material value
+         if (pt == KING)
+         {
+            // Interpolate between middlegame and endgame king tables
+            score -= KING_MG_PST[getFlippedSquare(sq)] * (1.0f - endgameWeight) +
+                     KING_EG_PST[getFlippedSquare(sq)] * endgameWeight;
+         }
+         else
+         {
+            score -= PAWN_PST[getFlippedSquare(sq)]; // Subtract piece-square table bonus
+         }
+      }
    }
 
    // Bishop pair bonus
