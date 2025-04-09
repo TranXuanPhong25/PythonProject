@@ -2,38 +2,41 @@
 
 #include <algorithm>
 
-int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply) {
+int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
+{
    int standPat = evaluate(board);
-   
+   int bestValue = standPat;
    if (standPat >= beta)
-       return beta;
-   
+      return standPat;
+
    if (alpha < standPat)
-       alpha = standPat;
-   
+      alpha = standPat;
+
    Movelist captures;
    if (board.sideToMove == White)
-       Movegen::legalmoves<White, CAPTURE>(board, captures);
+      Movegen::legalmoves<White, CAPTURE>(board, captures);
    else
-       Movegen::legalmoves<Black, CAPTURE>(board, captures);
-   
+      Movegen::legalmoves<Black, CAPTURE>(board, captures);
+
    scoreMoves(captures, board, 0);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
-   
-   for (int i = 0; i < captures.size; i++) {
-       Move move = captures[i].move;
-       board.makeMove(move);
-       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
-       board.unmakeMove(move);
-       
-       if (score >= beta)
-           return beta;
-       
-       if (score > alpha)
-           alpha = score;
+
+   for (int i = 0; i < captures.size; i++)
+   {
+      Move move = captures[i].move;
+      board.makeMove(move);
+      int score = -quiescence(board, -beta, -alpha, table, ply + 1);
+      board.unmakeMove(move);
+
+      if (score >= beta)
+         return score;
+      if (score > bestValue)
+         bestValue = score;
+      if (score > alpha)
+         alpha = score;
    }
-   
-   return alpha;
+
+   return bestValue;
 }
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
@@ -142,7 +145,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 }
 
 // Find the best move at the given depth
-Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
+Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table)
 {
    Movelist moves;
    if (board.sideToMove == White)
@@ -168,7 +171,7 @@ Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
       {
          if (moves[i].move == ttMove)
          {
-           // Start with the TT move as best
+            // Start with the TT move as best
             // but still search to confirm it's best
             break;
          }
@@ -180,11 +183,11 @@ Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
    int alpha = -INF_BOUND;
    int beta = INF_BOUND;
 
-      // Score and sort moves - put TT move first
+   // Score and sort moves - put TT move first
 
    scoreMoves(moves, board, depth, ttMove);
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
-   
+
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
