@@ -37,7 +37,11 @@ void benchPerft(int maxDepth)
        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",             // Initial position
        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // Kiwipete
        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",                            // Position 3
-       "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"      // Position 4
+       "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",     // Position 4
+       "8/8/8/8/5kp1/P7/8/1K1N4 w - - 0 1",                                    // Kc2 - mate
+       "8/8/8/5N2/8/p7/8/2NK3k w - - 0 1",                                     // Na2 - mate
+       "8/3k4/8/8/8/4B3/4KB2/2B5 w - - 0 1",                                   // draw
+
    };
 
    std::cout << "Starting Perft Benchmark..." << std::endl;
@@ -73,7 +77,11 @@ void benchSearch(int maxDepth, TranspositionTable *table)
        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
        "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-       "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"};
+       "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+       "8/8/8/8/5kp1/P7/8/1K1N4 w - - 0 1",  // Kc2 - mate
+       "8/8/8/5N2/8/p7/8/2NK3k w - - 0 1",   // Na2 - mate
+       "8/3k4/8/8/8/4B3/4KB2/2B5 w - - 0 1", // draw
+   };
 
    std::cout << "\nStarting Search Benchmark..." << std::endl;
 
@@ -110,7 +118,7 @@ int main(int argc, char **argv)
    auto ttable = std::make_unique<TranspositionTable>();
    table = ttable.get();
    table->Initialize(64);
-   int maxDepth = 6; // Default max depth for benchmarking
+   int maxDepth = 8; // Default max depth for benchmarking
    if (argc > 1)
    {
       maxDepth = std::stoi(argv[1]);
