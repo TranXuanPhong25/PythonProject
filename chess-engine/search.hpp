@@ -14,5 +14,6 @@ int evaluate(const Board &board);
 int negamax(Board &board, int depth, int alpha, int beta,TranspositionTable *table, int ply =0);
 
 // Function to get the best move at a given depth
-Move getBestMove(Board &board, int depth, TranspositionTable *table);
+Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table);
+Move getBestMove(Board &board, int maxDepth, TranspositionTable *table);
 

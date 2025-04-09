@@ -18,7 +18,7 @@ HIGHLIGHT = (186, 202, 68)  # Màu highlight ô được chọn
 FONT = pygame.font.Font(None, 36)  # Font hiển thị thời gian
 MENU_FONT = pygame.font.Font(None, 48)  # Font cho menu
 AI_TIME_LIMIT = float(os.getenv("AI_TIME_LIMIT", 10))
-ENGINE_PATH = os.getenv("ENGINE_PATH", "python uci/claude.py").split()
+ENGINE_PATH = os.getenv("ENGINE_PATH", "chess-engine/bin/uci.exe").split()
 
 # Game states
 MENU = 0
