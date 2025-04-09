@@ -8,7 +8,6 @@
 using namespace Chess;
 
 // Simple evaluation function - just counts material
-int evaluate(const Board &board);
 
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta,TranspositionTable *table, int ply =0);

@@ -2,6 +2,39 @@
 
 #include <algorithm>
 
+int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply) {
+   int standPat = evaluate(board);
+   
+   if (standPat >= beta)
+       return beta;
+   
+   if (alpha < standPat)
+       alpha = standPat;
+   
+   Movelist captures;
+   if (board.sideToMove == White)
+       Movegen::legalmoves<White, CAPTURE>(board, captures);
+   else
+       Movegen::legalmoves<Black, CAPTURE>(board, captures);
+   
+   scoreMoves(captures, board, 0);
+   std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
+   
+   for (int i = 0; i < captures.size; i++) {
+       Move move = captures[i].move;
+       board.makeMove(move);
+       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
+       board.unmakeMove(move);
+       
+       if (score >= beta)
+           return beta;
+       
+       if (score > alpha)
+           alpha = score;
+   }
+   
+   return alpha;
+}
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
@@ -27,7 +60,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
    if (depth == 0)
    {
-      int eval = evaluate(board);
+      int eval = quiescence(board, alpha, beta, table, ply);
       // Store leaf node in TT
       table->store(posKey, HFEXACT, NO_MOVE, 0, eval, eval, ply, false);
       return eval;
