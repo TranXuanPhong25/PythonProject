@@ -90,7 +90,7 @@ void benchSearch(int maxDepth, TranspositionTable *table)
       Board board(fen);
       std::cout << "\nTesting position: " << fen << std::endl;
 
-      for (int depth = 1; depth <= maxDepth; depth++)
+      for (int depth = 3; depth <= maxDepth; depth++)
       {
          table->clear(); // Clear TT between iterations
 
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
       maxDepth = std::stoi(argv[1]);
    }
 
-   benchPerft(maxDepth);
+   // benchPerft(maxDepth);
    benchSearch(maxDepth, table);
 
    return 0;

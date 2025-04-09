@@ -2,6 +2,38 @@
 
 #include <algorithm>
 
+int score_to_tt(int score, int ply)
+{
+   if (score >= IS_MATE_IN_MAX_PLY)
+   {
+
+      return score - ply;
+   }
+   else if (score <= IS_MATED_IN_MAX_PLY)
+   {
+
+      return score + ply;
+   }
+
+   return score;
+}
+
+int score_from_tt(int score, int ply)
+{
+   if (score >= IS_MATE_IN_MAX_PLY)
+   {
+
+      return score - ply;
+   }
+   else if (score <= IS_MATED_IN_MAX_PLY)
+   {
+
+      return score + ply;
+   }
+
+   return score;
+}
+
 int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
 {
    int standPat = evaluate(board);
@@ -11,7 +43,18 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    if (alpha < standPat)
       alpha = standPat;
+   bool ttHit = false;
+   bool is_pvnode = (beta - alpha) > 1;
 
+   TTEntry &tte = table->probe_entry(board.hashKey, ttHit, ply);
+   const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
+   if (!is_pvnode && ttHit)
+   {
+      if ((tte.flag == HFALPHA && tt_score <= alpha) || (tte.flag == HFBETA && tt_score >= beta) ||
+          (tte.flag == HFEXACT))
+         return tt_score;
+   }
+   Move bestmove = NO_MOVE;
    Movelist captures;
    if (board.sideToMove == White)
       Movegen::legalmoves<White, CAPTURE>(board, captures);
@@ -25,23 +68,38 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    {
       Move move = captures[i].move;
       board.makeMove(move);
+      table->prefetch_tt(board.hashKey);
       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
       board.unmakeMove(move);
 
-      if (score >= beta)
-         return score;
       if (score > bestValue)
+      {
+         bestmove = move;
          bestValue = score;
-      if (score > alpha)
-         alpha = score;
+
+         if (score > alpha)
+         {
+            alpha = score;
+            if (score >= beta)
+            {
+               break;
+            }
+         }
+      }
    }
+   int flag = bestValue >= beta ? HFBETA : HFALPHA;
+
+   table->store(board.hashKey, flag, bestmove, 0, score_to_tt(bestValue, ply), standPat, ply, is_pvnode);
 
    return bestValue;
 }
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
-
+   if (depth == 0)
+   {
+      return quiescence(board, alpha, beta, table, ply);
+   }
    // Check if position is already in TT
    U64 posKey = board.hashKey;
    table->prefetch_tt(posKey);
@@ -61,13 +119,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          return beta;
    }
 
-   if (depth == 0)
-   {
-      int eval = quiescence(board, alpha, beta, table, ply);
-      // Store leaf node in TT
-      table->store(posKey, HFEXACT, NO_MOVE, 0, eval, eval, ply, false);
-      return eval;
-   }
    Movelist moves;
 
    if (board.sideToMove == White)
