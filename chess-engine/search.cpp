@@ -109,7 +109,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 }
 
 // Find the best move at the given depth
-Move getBestMove(Board &board, int depth, TranspositionTable* table)
+Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
 {
    Movelist moves;
    if (board.sideToMove == White)
@@ -167,6 +167,22 @@ Move getBestMove(Board &board, int depth, TranspositionTable* table)
       }
    }
    table->store(board.hashKey, HFEXACT, bestMove, depth, bestScore, evaluate(board), 0, true);
+
+   return bestMove;
+}
+Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
+{
+   Move bestMove = NO_MOVE;
+
+   for (int depth = 1; depth <= maxDepth; depth++)
+   {
+
+      Move currentBestMOve = getBestMoveIterative(board, depth, table);
+      if (currentBestMOve != NO_MOVE)
+      {
+         bestMove = currentBestMOve;
+      }
+   }
 
    return bestMove;
 }
