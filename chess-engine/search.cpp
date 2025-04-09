@@ -11,7 +11,8 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    if (alpha < standPat)
       alpha = standPat;
-
+   auto entry = table->probe(board.getHash());
+    if (entry && entry->depth >= ply) return entry->value;
    Movelist captures;
    if (board.sideToMove == White)
       Movegen::legalmoves<White, CAPTURE>(board, captures);
