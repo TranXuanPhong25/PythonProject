@@ -36,13 +36,16 @@ int score_from_tt(int score, int ply)
 
 int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
 {
-   int standPat = evaluate(board);
-   int bestValue = standPat;
-   if (standPat >= beta)
-      return standPat;
+   if (ply >= MAX_PLY - 1)
+      return evaluate(board);
 
-   if (alpha < standPat)
+   int standPat = evaluate(board);
+   if (standPat >= beta)
+      return beta;
+
+   if (standPat > alpha)
       alpha = standPat;
+
    bool ttHit = false;
    bool is_pvnode = (beta - alpha) > 1;
 
@@ -54,6 +57,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
           (tte.flag == HFEXACT))
          return tt_score;
    }
+   int bestValue = standPat;
    Move bestmove = NO_MOVE;
    Movelist captures;
    if (board.sideToMove == White)
@@ -67,6 +71,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    for (int i = 0; i < captures.size; i++)
    {
       Move move = captures[i].move;
+
       board.makeMove(move);
       table->prefetch_tt(board.hashKey);
       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
@@ -96,7 +101,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
-   if (depth == 0)
+   if (depth <= 0)
    {
       return quiescence(board, alpha, beta, table, ply);
    }
@@ -107,8 +112,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // TT lookup
    bool ttHit;
    TTEntry &entry = table->probe_entry(posKey, ttHit, ply);
+   bool is_pvnode = (beta - alpha) > 1;
 
-   if (ttHit && entry.depth >= depth)
+   if (!is_pvnode&&ttHit && entry.depth >= depth)
    {
       // Use the value from TT based on bound type
       if (entry.flag == HFEXACT)
@@ -190,7 +196,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // Store position in TT
-   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board), ply, nodeFlag == HFEXACT);
+   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board), ply, is_pvnode);
 
    return bestScore;
 }
