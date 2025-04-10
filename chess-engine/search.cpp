@@ -77,7 +77,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    else
       Movegen::legalmoves<Black, CAPTURE>(board, captures);
 
-   scoreMoves(captures, board, 0);
+   scoreMoves(captures, board, tte.move,ply);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
 
    for (int i = 0; i < captures.size; i++)
@@ -176,7 +176,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Try TT move first if available
    Move ttMove = ttHit ? entry.move : NO_MOVE;
 
-   scoreMoves(moves, board, depth);
+   scoreMoves(moves, board, ttMove, ply);
 
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
@@ -236,8 +236,15 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
             if (alpha >= beta)
             {
-               nodeFlag = HFBETA;
-               break; // Beta cutoff
+               if (!is_capture(board,move) && !promoted(move)) {
+                  addKillerMove(move, ply);
+                  
+                  // Also update history table for quiet moves
+                  updateHistory(board, move, depth);
+              }
+              
+              nodeFlag = HFBETA;
+              break; // Beta cutoff
             }
          }
       }
@@ -290,7 +297,7 @@ Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table)
 
    // Score and sort moves - put TT move first
 
-   scoreMoves(moves, board, depth, ttMove);
+   scoreMoves(moves, board, ttMove);
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
    for (int i = 0; i < moves.size; i++)
