@@ -2,6 +2,17 @@
 
 #include <algorithm>
 
+int getPieceCounts(const Board &board, Color color)
+{
+   int count = 0;
+   count += popcount(board.pieces(PAWN, color));
+   count += popcount(board.pieces(KNIGHT, color));
+   count += popcount(board.pieces(BISHOP, color));
+   count += popcount(board.pieces(ROOK, color));
+   count += popcount(board.pieces(QUEEN, color));
+   count += popcount(board.pieces(KING, color));
+   return count;
+}
 int score_to_tt(int score, int ply)
 {
    if (score >= IS_MATE_IN_MAX_PLY)
@@ -72,7 +83,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    for (int i = 0; i < captures.size; i++)
    {
       Move move = captures[i].move;
-      
+
       if (!see(board, move, -50))
       {
          continue;
@@ -141,12 +152,12 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
 
+   bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
    if (static_cast<int>(moves.size) == 0)
    {
       // Check for checkmate or stalemate
       // std::cout << "Check for checkmate or stalemate\n";
       int score = 0;
-      bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
 
       if (inCheck)
       {
@@ -176,11 +187,38 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
-      if(!see(board, move, -50) )
+      if (!see(board, move, -50))
       {
          continue;
       }
-      
+      // Add this to your negamax function before move generation
+      if (depth >= 3 && !inCheck && !is_pvnode)
+      {
+         // Skip null move in endgame positions (simplistic approach)
+         if (getPieceCounts(board,board.sideToMove) < 12)
+         { // Only use in middlegame
+            board.makeNullMove();
+            int nullScore = -negamax(board, depth - 1 - 2, -beta, -alpha, table, ply + 1);
+            board.unmakeNullMove();
+
+            if (nullScore >= beta)
+            {
+               // Verification search can be added here for safety
+               if (depth >= 4)
+               {
+                  board.makeMove(move);
+                  int verificationScore = -negamax(board, depth - 1 - 1, -beta, -beta + 1, table, ply + 1);
+                  board.unmakeMove(move);
+
+                  if (verificationScore >= beta)
+                  {
+                     return beta;
+                  }
+               }
+               return beta;
+            }
+         }
+      }
       board.makeMove(move);
       // Negamax recursively calls with inverted bounds
       int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
