@@ -64,7 +64,6 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
 
         Piece attacker = board.pieceAtB(from(move));
         Piece victim = board.pieceAtB(to(move));
-        bool isCapture = victim != None;
         // Prioritize TT move
         if (move == ttMove)
         {
