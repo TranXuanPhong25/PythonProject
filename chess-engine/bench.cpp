@@ -1,5 +1,6 @@
 #include "bench.hpp"
 #include <bits/unique_ptr.h>
+
 // Benchmark the speed of your search algorithm
 void benchSearch(int maxDepth, TranspositionTable *table)
 {
@@ -39,7 +40,7 @@ void benchSearch(int maxDepth, TranspositionTable *table)
        "r3k2r/ppp1pp1p/2nqb1pn/3p4/4P3/2PP4/PP1NBPPP/R2QK1NR w KQkq - 1 5",
        "3r1rk1/1pp1pn1p/p1n1q1p1/3p4/Q3P3/2P5/PP1NBPPP/4RRK1 w - - 0 12",
        "5rk1/1pp1pn1p/p3Brp1/8/1n6/5N2/PP3PPP/2R2RK1 w - - 2 20",
-       "8/1p2pk1p/p1p1r1p1/3n4/8/5R2/PP3PPP/4R1K1 b - - 3 27",
+       "8/1p2pk1p/p1p1r1p1/3n4/8/5R2/PP3PPP/4R1K1 b - - 3 27"
    };
 
    std::cout << "\nStarting Search Benchmark..." << std::endl;
@@ -47,7 +48,7 @@ void benchSearch(int maxDepth, TranspositionTable *table)
    for (const auto &fen : positions)
    {
       Board board(fen);
-      std::cout << "\n"<<index++<<"Testing position: " << fen << std::endl;
+      std::cout << "\n"<<index++<<" Testing position: " << fen << std::endl;
 
       for (int depth = 5; depth <= maxDepth; depth++)
       {
@@ -78,6 +79,7 @@ int main(int argc, char **argv)
    table = ttable.get();
    table->Initialize(64);
    int maxDepth = 9; // Default max depth for benchmarking
+
    if (argc > 1)
    {
       maxDepth = std::stoi(argv[1]);

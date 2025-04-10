@@ -37,16 +37,6 @@ static inline bool is_capture(Board &board, Move move) { return (board.pieceAtB(
 
 static inline uint32_t reduce_hash(uint32_t x, uint32_t N) { return ((uint64_t)x * (uint64_t)N) >> 32; }
 
-typedef uint64_t Bitboard;
-
-// Extract and remove the least significant bit (LSB) from a bitboard
-inline int pop_lsb(Bitboard &bb)
-{
-    int lsb = __builtin_ctzll(bb); // Count trailing zeros (index of LSB)
-    bb &= bb - 1;                 // Remove the LSB
-    return lsb;
-}
-
 enum {
     NSQUARES = 64,
     NPIECES = 12,
