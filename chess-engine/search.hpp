@@ -5,6 +5,7 @@
 #include "evaluate.hpp"
 #include "score_move.hpp"
 #include "tt.hpp"
+#include "see.hpp"
 using namespace Chess;
 
 // Simple evaluation function - just counts material

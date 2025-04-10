@@ -60,6 +60,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    int bestValue = standPat;
    Move bestmove = NO_MOVE;
    Movelist captures;
+   int moveCount = 0;
    if (board.sideToMove == White)
       Movegen::legalmoves<White, CAPTURE>(board, captures);
    else
@@ -71,12 +72,16 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    for (int i = 0; i < captures.size; i++)
    {
       Move move = captures[i].move;
-
+      
+      if (!see(board, move, -50))
+      {
+         continue;
+      }
       board.makeMove(move);
       table->prefetch_tt(board.hashKey);
       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
       board.unmakeMove(move);
-
+      moveCount++;
       if (score > bestValue)
       {
          bestmove = move;
@@ -114,7 +119,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    TTEntry &entry = table->probe_entry(posKey, ttHit, ply);
    bool is_pvnode = (beta - alpha) > 1;
 
-   if (!is_pvnode&&ttHit && entry.depth >= depth)
+   if (!is_pvnode && ttHit && entry.depth >= depth)
    {
       // Use the value from TT based on bound type
       if (entry.flag == HFEXACT)
@@ -171,6 +176,11 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
+      if(!see(board, move, -50) )
+      {
+         continue;
+      }
+      
       board.makeMove(move);
       // Negamax recursively calls with inverted bounds
       int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
