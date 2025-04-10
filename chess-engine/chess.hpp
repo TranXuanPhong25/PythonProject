@@ -31,6 +31,8 @@ namespace Chess
 // TYPES DEFINITION
 // *******************
 #define U64 uint64_t
+using Bitboard = U64;
+
 #define MAX_SQ 64
 #define DEFAULT_POS std::string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
@@ -665,14 +667,24 @@ static constexpr U64 castlingKey[16] = {0,
 #endif
    }
 
+      inline int extract_lsb_index(Bitboard &bb)
+   {
+      int index = __builtin_ctzll(bb);
+      bb &= bb - 1;
+      return index;
+   }
+
    /// @brief return the lsb and remove it
    /// @param mask
    /// @return
    inline Square poplsb(U64 &mask)
    {
-      int8_t s = lsb(mask);
-      mask &= mask - 1;
-      return Square(s);
+      return Square(extract_lsb_index(mask));
+   }
+
+      inline int pop_lsb(Bitboard &bb)
+   {
+      return extract_lsb_index(bb);
    }
 
    /// @brief splits a string into multiple parts, delimiter is whitespace
