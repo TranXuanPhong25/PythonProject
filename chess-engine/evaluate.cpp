@@ -1,5 +1,5 @@
 #include "evaluate.hpp"
-#include "types.hpp"
+#include "chess.hpp"
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
 inline int squareToIndex(Square sq)
