@@ -127,169 +127,201 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
-   if (depth <= 0)
-   {
-      return quiescence(board, alpha, beta, table, ply);
-   }
-   // Check if position is already in TT
-   U64 posKey = board.hashKey;
-   table->prefetch_tt(posKey);
-
-   // TT lookup
-   bool ttHit;
-   TTEntry &entry = table->probe_entry(posKey, ttHit);
-   bool is_pvnode = (beta - alpha) > 1;
-   int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
-   if (!is_pvnode && ttHit && entry.depth >= depth)
-   {
-      // Use the value from TT based on bound type
-      if (entry.flag == HFEXACT)
-         return entry.score;
-      if (entry.flag == HFALPHA && entry.score <= alpha)
-         return alpha;
-      if (entry.flag == HFBETA && entry.score >= beta)
-         return beta;
-   }
-   bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
-   bool isRoot = (ply == 0);
-   int staticEval;
-   int eval = 0;
-
-   if (ttHit)
-   {
-      staticEval = entry.eval;
-      eval = tt_score;
-   }
-   else
-   {
-      staticEval = evaluate(board);
-   }
-   // Reverse Futility Pruning
-   // Only apply at non-PV nodes, not in check, and at shallow depths
-   if (!is_pvnode && !inCheck && depth <= 8 && eval >= beta)
-   {
-      // The margin increases with depth
-      int margin = 120 * depth;
-
-      // If static eval is well above beta, assume position is too good
-      // and will lead to a beta cutoff anyway
-      if (staticEval - margin >= beta)
-      {
-         return beta; // Return beta as a lower bound
-      }
-   }
-
-   if (!inCheck && !is_pvnode && !isRoot)
-   {
-
-      /* Null move pruning
-       * If we give our opponent a free move and still maintain beta, we prune
-       * some nodes.
-       */
-      if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
-      {
-         int R = 2;
-         // Skip null move in endgame positions (simplistic approach)
-         if (getPieceCounts(board, board.sideToMove) > 5) // Adjusted threshold for better tuning
-         {
-            board.makeNullMove();
-            int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1); // Use a reduction factor R
-            board.unmakeNullMove();
-
-            if (nullScore >= beta)
+    // Early return checks remain the same
+    if (depth <= 0)
+        return quiescence(board, alpha, beta, table, ply);
+    
+    // TT lookup remains the same
+    U64 posKey = board.hashKey;
+    table->prefetch_tt(posKey);
+    bool ttHit;
+    TTEntry &entry = table->probe_entry(posKey, ttHit);
+    bool is_pvnode = (beta - alpha) > 1;
+    int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+    
+    // TT cutoff logic remains the same
+    if (!is_pvnode && ttHit && entry.depth >= depth)
+    {
+        if (entry.flag == HFEXACT)
+            return entry.score;
+        if (entry.flag == HFALPHA && entry.score <= alpha)
+            return alpha;
+        if (entry.flag == HFBETA && entry.score >= beta)
+            return beta;
+    }
+    
+    // Checkmate detection and pruning logic remain the same
+    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+    bool isRoot = (ply == 0);
+    int staticEval;
+    int eval = 0;
+    
+    if (ttHit)
+    {
+        staticEval = entry.eval;
+        eval = tt_score;
+    }
+    else
+    {
+        staticEval = evaluate(board);
+    }
+    
+    // Reverse Futility Pruning remains the same
+    if (!is_pvnode && !inCheck && depth <= 8 && eval >= beta)
+    {
+        int margin = 120 * depth;
+        if (staticEval - margin >= beta)
+            return beta;
+    }
+    
+    // Null move pruning remains the same
+    if (!inCheck && !is_pvnode && !isRoot)
+    {
+        if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+        {
+            int R = 2;
+            if (getPieceCounts(board, board.sideToMove) > 5)
             {
-               if (nullScore > ISMATE)
-               {
-                  nullScore = beta;
-               }
-               return nullScore; // Beta cutoff
+                board.makeNullMove();
+                int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
+                board.unmakeNullMove();
+                
+                if (nullScore >= beta)
+                {
+                    if (nullScore > ISMATE)
+                        nullScore = beta;
+                    return nullScore;
+                }
             }
-         }
-      }
-   }
-   Movelist moves;
-   if (board.sideToMove == White)
-   {
-      Movegen::legalmoves<White, ALL>(board, moves);
-   }
-   else
-   {
-      Movegen::legalmoves<Black, ALL>(board, moves);
-   }
+        }
+    }
+    
+    // Add futility pruning
+    bool futilityPruning = false;
+    if (!is_pvnode && !inCheck && depth <= 3) {
+        int futilityMargin = 90 * depth;
+        futilityPruning = (staticEval + futilityMargin <= alpha);
+    }
 
-   if (static_cast<int>(moves.size) == 0)
-   {
-      // Check for checkmate or stalemate
-      // std::cout << "Check for checkmate or stalemate\n";
-      int score = 0;
+    // Move generation remains the same
+    Movelist moves;
+    if (board.sideToMove == White)
+        Movegen::legalmoves<White, ALL>(board, moves);
+    else
+        Movegen::legalmoves<Black, ALL>(board, moves);
+    
+    // Terminal node check remains the same
+    if (static_cast<int>(moves.size) == 0)
+    {
+        int score = 0;
+        if (inCheck)
+            score = board.sideToMove == White ? mated_in(ply) : mate_in(-ply);
+        else
+            score = 0;
+        table->store(posKey, HFEXACT, NO_MOVE, depth, score, score);
+        return score;
+    }
+    
+    // Move ordering remains the same
+    Move ttMove = ttHit ? entry.move : NO_MOVE;
+    scoreMoves(moves, board, ttMove, ply);
+    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+    
+    // Search variables
+    int bestScore = -INF_BOUND;
+    Move bestMove = NO_MOVE;
+    uint8_t nodeFlag = HFALPHA;
+    int movesSearched = 0;
+    
+    // Main search loop with simplified LMR
+    for (int i = 0; i < moves.size; i++)
+    {
+        Move move = moves[i].move;
+        
+        // Early pruning with SEE
+        if (i > 0 && !see(board, move, -65*depth))
+            continue;
+        
+        // Then in your move loop:
+        bool isCapture = is_capture(board, move);
+        bool isPromotion = promoted(move);
+        
+        if (futilityPruning && i > 0 && !isCapture && !isPromotion)
+            continue;  // Skip this quiet move
 
-      if (inCheck)
-      {
-         // Checkmate - return mated score
-         score = board.sideToMove == White ? mated_in(ply) : mate_in(-ply);
-      }
-      else
-      {
-         // Stalemate - return draw score
-         score = 0;
-      }
-      table->store(posKey, HFEXACT, NO_MOVE, depth, score, score);
-      return score;
-   }
-
-   // Try TT move first if available
-   Move ttMove = ttHit ? entry.move : NO_MOVE;
-
-   scoreMoves(moves, board, ttMove, ply);
-
-   std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
-
-   int bestScore = -INF_BOUND;
-   Move bestMove = NO_MOVE;
-   uint8_t nodeFlag = HFALPHA;
-   for (int i = 0; i < moves.size; i++)
-   {
-      Move move = moves[i].move;
-      if (!see(board, move, -65*depth))
-      {
-         continue;
-      }
-
-      board.makeMove(move);
-      int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
-      board.unmakeMove(move);
-
-      if (score > bestScore)
-      {
-         bestScore = score;
-         bestMove = move;
-
-         if (score > alpha)
-         {
-            nodeFlag = HFEXACT;
-            alpha = score;
-
-            if (alpha >= beta)
-            {
-               if (!is_capture(board, move) && !promoted(move))
-               {
-                  addKillerMove(move, ply);
-
-                  // Also update history table for quiet moves
-                  updateHistory(board, move, depth);
-               }
-
-               nodeFlag = HFBETA;
-               break; // Beta cutoff
+        board.makeMove(move);
+        movesSearched++;
+        
+        int score;
+        // Full Window Search for first move
+        if (i == 0) {
+            score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+        }
+        // LMR for quiet moves after first few moves
+        else if (!isRoot && depth >= 3 && !inCheck && !isCapture && !isPromotion) {
+            // More aggressive reduction formula - vary based on depth and move index
+            // Higher numbers = more pruning = faster search
+            int R = 1;
+            
+            if (i > 4)  // More reduction for later moves
+                R++;
+            
+            if (depth > 5)  // More reduction for deeper searches
+                R++;
+                
+            // Don't reduce too much for killer moves (likely good tactical moves)
+            if (move == killerMoves[ply][0] || move == killerMoves[ply][1])
+                R = std::max(0, R-1);
+            
+            // Do reduced search with null window
+            score = -negamax(board, depth - 1 - R, -alpha - 1, -alpha, table, ply + 1);
+            
+            // Only do full search if the reduced search looks promising
+            if (score > alpha)
+                score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+        }
+        // PVS for non-reduced moves
+        else if (i > 0) {
+            // Try null window search first (assume move is not good)
+            score = -negamax(board, depth - 1, -alpha - 1, -alpha, table, ply + 1);
+            
+            // Only search with full window if it might improve alpha
+            if (score > alpha && score < beta)
+                score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+        }
+        else {
+            // Full window search for first move
+            score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+        }
+        
+        board.unmakeMove(move);
+        
+        // Update best score logic remains the same
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = move;
+            
+            if (score > alpha) {
+                nodeFlag = HFEXACT;
+                alpha = score;
+                
+                if (alpha >= beta) {
+                    if (!isCapture && !isPromotion) {
+                        addKillerMove(move, ply);
+                        updateHistory(board, move, depth);
+                    }
+                    
+                    nodeFlag = HFBETA;
+                    break;
+                }
             }
-         }
-      }
-   }
-
-   // Store position in TT
-   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board));
-
-   return bestScore;
+        }
+    }
+    
+    // Store position in TT
+    table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board));
+    
+    return bestScore;
 }
 
 // Find the best move at the given depth
