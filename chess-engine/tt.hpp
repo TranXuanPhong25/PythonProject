@@ -38,8 +38,8 @@ class TranspositionTable {
     uint8_t currentAge = 0;
 
     void Initialize(int usersize);
-    void store(U64 key, uint8_t f, Move move, uint8_t depth, int score, int eval, int ply, bool pv);
-    TTEntry &probe_entry(U64 key, bool &ttHit, int ply);
+    void store(U64 key, uint8_t f, Move move, uint8_t depth, int score, int eval);
+    TTEntry &probe_entry(U64 key, bool &ttHit);
     Move probeMove(U64 key);
     void prefetch_tt(const U64 key);
     void clear();
