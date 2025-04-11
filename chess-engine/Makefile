@@ -21,7 +21,7 @@ TARGET = $(BIN_DIR)/uci.exe
 # Default target
 all: dirs $(TARGET)
 
-bench: evaluate.cpp search.cpp tt.cpp chess.cpp score_move.cpp 
+bench: evaluate.cpp search.cpp tt.cpp chess.cpp score_move.cpp see.cpp
 
 # Create directories
 dirs:

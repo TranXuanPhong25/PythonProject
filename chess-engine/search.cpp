@@ -2,10 +2,125 @@
 
 #include <algorithm>
 
+int getPieceCounts(const Board &board, Color color)
+{
+   int count = 0;
+   count += popcount(board.pieces(PAWN, color));
+   count += popcount(board.pieces(KNIGHT, color));
+   count += popcount(board.pieces(BISHOP, color));
+   count += popcount(board.pieces(ROOK, color));
+   count += popcount(board.pieces(QUEEN, color));
+   count += popcount(board.pieces(KING, color));
+   return count;
+}
+int score_to_tt(int score, int ply)
+{
+   if (score >= IS_MATE_IN_MAX_PLY)
+   {
+
+      return score - ply;
+   }
+   else if (score <= IS_MATED_IN_MAX_PLY)
+   {
+
+      return score + ply;
+   }
+
+   return score;
+}
+
+int score_from_tt(int score, int ply)
+{
+   if (score >= IS_MATE_IN_MAX_PLY)
+   {
+
+      return score - ply;
+   }
+   else if (score <= IS_MATED_IN_MAX_PLY)
+   {
+
+      return score + ply;
+   }
+
+   return score;
+}
+
+int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
+{
+   if (ply >= MAX_PLY - 1)
+      return evaluate(board);
+
+   int standPat = evaluate(board);
+   if (standPat >= beta)
+      return beta;
+
+   if (standPat > alpha)
+      alpha = standPat;
+
+   bool ttHit = false;
+   bool is_pvnode = (beta - alpha) > 1;
+
+   TTEntry &tte = table->probe_entry(board.hashKey, ttHit, ply);
+   const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
+   if (!is_pvnode && ttHit)
+   {
+      if ((tte.flag == HFALPHA && tt_score <= alpha) || (tte.flag == HFBETA && tt_score >= beta) ||
+          (tte.flag == HFEXACT))
+         return tt_score;
+   }
+   int bestValue = standPat;
+   Move bestmove = NO_MOVE;
+   Movelist captures;
+   int moveCount = 0;
+   if (board.sideToMove == White)
+      Movegen::legalmoves<White, CAPTURE>(board, captures);
+   else
+      Movegen::legalmoves<Black, CAPTURE>(board, captures);
+
+   scoreMoves(captures, board, tte.move, ply);
+   std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
+
+   for (int i = 0; i < captures.size; i++)
+   {
+      Move move = captures[i].move;
+
+      if (!see(board, move, -50))
+      {
+         continue;
+      }
+      board.makeMove(move);
+      table->prefetch_tt(board.hashKey);
+      int score = -quiescence(board, -beta, -alpha, table, ply + 1);
+      board.unmakeMove(move);
+      moveCount++;
+      if (score > bestValue)
+      {
+         bestmove = move;
+         bestValue = score;
+
+         if (score > alpha)
+         {
+            alpha = score;
+            if (score >= beta)
+            {
+               break;
+            }
+         }
+      }
+   }
+   int flag = bestValue >= beta ? HFBETA : HFALPHA;
+
+   table->store(board.hashKey, flag, bestmove, 0, score_to_tt(bestValue, ply), standPat, ply, is_pvnode);
+
+   return bestValue;
+}
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
-
+   if (depth <= 0)
+   {
+      return quiescence(board, alpha, beta, table, ply);
+   }
    // Check if position is already in TT
    U64 posKey = board.hashKey;
    table->prefetch_tt(posKey);
@@ -13,8 +128,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // TT lookup
    bool ttHit;
    TTEntry &entry = table->probe_entry(posKey, ttHit, ply);
-
-   if (ttHit && entry.depth >= depth)
+   bool is_pvnode = (beta - alpha) > 1;
+   int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+   if (!is_pvnode && ttHit && entry.depth >= depth)
    {
       // Use the value from TT based on bound type
       if (entry.flag == HFEXACT)
@@ -25,13 +141,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          return beta;
    }
 
-   if (depth == 0)
-   {
-      int eval = evaluate(board);
-      // Store leaf node in TT
-      table->store(posKey, HFEXACT, NO_MOVE, 0, eval, eval, ply, false);
-      return eval;
-   }
    Movelist moves;
 
    if (board.sideToMove == White)
@@ -43,12 +152,12 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
 
+   bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
    if (static_cast<int>(moves.size) == 0)
    {
       // Check for checkmate or stalemate
       // std::cout << "Check for checkmate or stalemate\n";
       int score = 0;
-      bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
 
       if (inCheck)
       {
@@ -67,17 +176,52 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Try TT move first if available
    Move ttMove = ttHit ? entry.move : NO_MOVE;
 
-   scoreMoves(moves, board, depth);
+   scoreMoves(moves, board, ttMove, ply);
 
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
    int bestScore = -INF_BOUND;
    Move bestMove = NO_MOVE;
    uint8_t nodeFlag = HFALPHA;
-
+   int eval = 0;
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
+      if (!see(board, move, -50))
+      {
+         continue;
+      }
+      if (ttHit)
+      {
+         eval == tt_score;
+      }
+      if (!inCheck && !is_pvnode && ply != 0)
+      {
+
+         /* Null move pruning
+          * If we give our opponent a free move and still maintain beta, we prune
+          * some nodes.
+          */
+         if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+         {
+            int R = 2;
+            // Skip null move in endgame positions (simplistic approach)
+            if (getPieceCounts(board, board.sideToMove) > 5) // Adjusted threshold for better tuning
+            {
+               board.makeNullMove();
+               int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1); // Use a reduction factor R
+               board.unmakeNullMove();
+
+               if (nullScore >= beta)
+               {
+                  if(nullScore > ISMATE){
+                     nullScore = beta;
+                  }
+                  return nullScore; // Beta cutoff
+               }  
+            }
+         }
+      }
       board.makeMove(move);
       // Negamax recursively calls with inverted bounds
       int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
@@ -95,6 +239,14 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
             if (alpha >= beta)
             {
+               if (!is_capture(board, move) && !promoted(move))
+               {
+                  addKillerMove(move, ply);
+
+                  // Also update history table for quiet moves
+                  updateHistory(board, move, depth);
+               }
+
                nodeFlag = HFBETA;
                break; // Beta cutoff
             }
@@ -103,13 +255,13 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // Store position in TT
-   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board), ply, nodeFlag == HFEXACT);
+   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board), ply, is_pvnode);
 
    return bestScore;
 }
 
 // Find the best move at the given depth
-Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
+Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table)
 {
    Movelist moves;
    if (board.sideToMove == White)
@@ -135,7 +287,7 @@ Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
       {
          if (moves[i].move == ttMove)
          {
-           // Start with the TT move as best
+            // Start with the TT move as best
             // but still search to confirm it's best
             break;
          }
@@ -147,11 +299,11 @@ Move getBestMoveIterative(Board &board, int depth, TranspositionTable* table)
    int alpha = -INF_BOUND;
    int beta = INF_BOUND;
 
-      // Score and sort moves - put TT move first
+   // Score and sort moves - put TT move first
 
-   scoreMoves(moves, board, depth, ttMove);
+   scoreMoves(moves, board, ttMove);
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
-   
+
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
