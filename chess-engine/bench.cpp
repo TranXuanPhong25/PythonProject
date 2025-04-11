@@ -78,7 +78,7 @@ int main(int argc, char **argv)
    auto ttable = std::make_unique<TranspositionTable>();
    table = ttable.get();
    table->Initialize(64);
-   int maxDepth = 9; // Default max depth for benchmarking
+   int maxDepth = 13; // Default max depth for benchmarking
 
    if (argc > 1)
    {
