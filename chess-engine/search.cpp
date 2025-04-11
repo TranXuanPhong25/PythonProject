@@ -1,7 +1,16 @@
 #include "search.hpp"
-
+#include <math.h>
 #include <algorithm>
+// Calculate Late Move Reduction amount
+inline int get_lmr_reduction(int depth, int moveNumber)
+{
+   // Base reduction
+   if (depth < 3 || moveNumber < 4)
+      return 0;
 
+   // Logarithmic formula for reduction
+   return std::min(depth - 2, static_cast<int>(0.5 + log(depth) * log(moveNumber) / 2.25));
+}
 int getPieceCounts(const Board &board, Color color)
 {
    int count = 0;
@@ -78,7 +87,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    else
       Movegen::legalmoves<Black, CAPTURE>(board, captures);
 
-   scoreMoves(captures, board, tte.move,ply);
+   scoreMoves(captures, board, tte.move, ply);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
 
    for (int i = 0; i < captures.size; i++)
@@ -196,7 +205,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       if (depth >= 3 && !inCheck && !is_pvnode)
       {
          // Skip null move in endgame positions (simplistic approach)
-         if (getPieceCounts(board,board.sideToMove) < 12)
+         if (getPieceCounts(board, board.sideToMove) < 12)
          { // Only use in middlegame
             board.makeNullMove();
             int nullScore = -negamax(board, depth - 1 - 2, -beta, -alpha, table, ply + 1);
@@ -222,7 +231,37 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
       board.makeMove(move);
       // Negamax recursively calls with inverted bounds
-      int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+      // int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+      int score;
+    bool isCapture = board.pieceAtB(to(move)) != None || promoted(move);
+    bool isCheck = board.sideToMove == White ? 
+        board.isSquareAttacked(White, board.KingSQ(Black)) : 
+        board.isSquareAttacked(Black, board.KingSQ(White));
+    
+    if (i >= 3 && depth >= 3 && !isCapture && !isCheck && !inCheck && !is_pvnode) {
+        // Calculate reduction amount based on depth and move number
+        int R = get_lmr_reduction(depth, i);
+        
+        // Adjust reduction based on history score
+        int side = board.sideToMove == White ? 0 : 1;
+        int historyScore = historyTable[side][from(move)][to(move)];
+        if (historyScore < 0) R++;
+        if (historyScore > 1000) R--;
+        
+        // Ensure we don't reduce too much
+        R = std::min(depth - 2, std::max(1, R));
+        
+        // Reduced depth search with null window
+        score = -negamax(board, depth - 1 - R, -alpha - 1, -alpha, table, ply + 1);
+        
+        // Re-search at full depth if promising
+        if (score > alpha && score < beta) {
+            score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+        }
+    } else {
+        // Full-depth search for important moves
+        score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+    }
       board.unmakeMove(move);
 
       if (score > bestScore)
@@ -237,15 +276,16 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
             if (alpha >= beta)
             {
-               if (!is_capture(board,move) && !promoted(move)) {
+               if (!is_capture(board, move) && !promoted(move))
+               {
                   addKillerMove(move, ply);
-                  
+
                   // Also update history table for quiet moves
                   updateHistory(board, move, depth);
-              }
-              
-              nodeFlag = HFBETA;
-              break; // Beta cutoff
+               }
+
+               nodeFlag = HFBETA;
+               break; // Beta cutoff
             }
          }
       }

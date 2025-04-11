@@ -23,7 +23,7 @@ void updateHistory(Board &board, Move move, int depth)
     int to_sq = to(move);
 
     // Bonus value proportional to depth
-    int bonus = depth * depth;
+    int bonus = depth * depth*1.35;
 
     // Add bonus to history score
     historyTable[side][from_sq][to_sq] += bonus;
@@ -168,6 +168,10 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             else if (move == killerMoves[ply][1])
             {
                 score = 8300;
+            }  else  // Add this else clause to use history for non-killer quiet moves
+            {
+                int side = board.sideToMove == White ? 0 : 1;
+                score = historyTable[side][from(move)][to(move)];
             }
         }
         // 5. History heuristic (quiets that have been good in the past)
