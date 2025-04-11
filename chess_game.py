@@ -11,8 +11,8 @@ load_dotenv()
 # Cấu hình Pygame
 LAST_MOVE = (255, 255, 153)  # Light yellow color for last move highlighting
 pygame.init()
-WIDTH, HEIGHT = 800, 800
-SQUARE_SIZE = WIDTH // 8
+WIDTH, HEIGHT = 840, 860
+SQUARE_SIZE = 100
 WHITE = (240, 217, 181)
 BROWN = (181, 136, 99)
 HIGHLIGHT = (186, 202, 68)  # Màu highlight ô được chọn
@@ -94,22 +94,35 @@ def draw_board(screen, board, selected_square, player_time, ai_time, depth, last
             elif last_move_to is not None and square == last_move_to:
                 color = LAST_MOVE
 
-            pygame.draw.rect(screen, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+            pygame.draw.rect(screen, color, (20+col * SQUARE_SIZE, 40+row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
             piece = board.piece_at(square)
             if piece:
-                screen.blit(piece_images[piece.symbol()], (col * SQUARE_SIZE, row * SQUARE_SIZE))
+                screen.blit(piece_images[piece.symbol()], (20+col * SQUARE_SIZE, 40+row * SQUARE_SIZE))
 
 
-    pygame.draw.rect(screen, color, (8 * SQUARE_SIZE, 0 * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+    label_font = pygame.font.Font(None, 24)
+
+    for col in range(8):
+        file_label = chr(ord('a') + col)
+        text_color = BROWN if col % 2 == 0 else WHITE
+        label = label_font.render(file_label, True, text_color)
+        screen.blit(label, (col * SQUARE_SIZE + 65, HEIGHT - 20))
+
+        # Draw rank labels (1 through 8) on the left
+    for row in range(8):
+        rank_label = str(8 - row)
+        text_color = BROWN if row % 2 == 1 else WHITE
+        label = label_font.render(rank_label, True, text_color)
+        screen.blit(label, (5, row * SQUARE_SIZE + 85))
+
+
 
     # Hiển thị thời gian và độ sâu
-    player_text = FONT.render(f"Player: {player_time:.2f}s", True, (255, 255, 255))
     ai_text = FONT.render(f"AI: {ai_time:.2f}s", True, (255, 255, 255))
     depth_text = FONT.render(f"Depth: {depth}", True, (255, 255, 255))
-    screen.blit(player_text, (10, 10))  # Góc trái trên
-    screen.blit(ai_text, (WIDTH - ai_text.get_width() - 10, 10))  # Góc phải trên
-    screen.blit(depth_text, (WIDTH // 2 - depth_text.get_width() // 2, 10))  # Giữa trên
+    screen.blit(ai_text, (WIDTH - ai_text.get_width() - 10, 10))
+    screen.blit(depth_text, (20, 10))
 
 
 # Hàm hiển thị menu chọn độ sâu
@@ -151,7 +164,7 @@ ai_depth = 3  # Default depth
 input_text = ''  # Text input for depth
 
 # Khởi tạo cửa sổ Pygame
-screen = pygame.display.set_mode((WIDTH + SQUARE_SIZE, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Người vs AI")
 
 running = True
