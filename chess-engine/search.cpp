@@ -49,6 +49,10 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 {
    if (ply >= MAX_PLY - 1)
       return evaluate(board);
+   if (board.isRepetition())
+   {
+      return 0;
+   }
 
    int standPat = evaluate(board);
    if (standPat >= beta)
@@ -60,7 +64,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    bool ttHit = false;
    bool is_pvnode = (beta - alpha) > 1;
 
-   TTEntry &tte = table->probe_entry(board.hashKey, ttHit );
+   TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
    if (!is_pvnode && ttHit)
    {
@@ -68,31 +72,37 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
           (tte.flag == HFEXACT))
          return tt_score;
    }
+
    int bestValue = standPat;
    Move bestmove = NO_MOVE;
-   Movelist captures;
    int moveCount = 0;
+
+   Movelist captures;
    if (board.sideToMove == White)
       Movegen::legalmoves<White, CAPTURE>(board, captures);
    else
       Movegen::legalmoves<Black, CAPTURE>(board, captures);
 
-   scoreMoves(captures, board, tte.move, ply);
+   ScoreMovesForQS(board, captures, tte.move);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
 
    for (int i = 0; i < captures.size; i++)
    {
       Move move = captures[i].move;
 
-      if (!see(board, move, -50))
+      if (!see(board, move, -65) )
+      {
+         continue;
+      }
+      if (captures[i].value < GoodCaptureScore && moveCount >= 1)
       {
          continue;
       }
       board.makeMove(move);
       table->prefetch_tt(board.hashKey);
+      moveCount++;
       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
       board.unmakeMove(move);
-      moveCount++;
       if (score > bestValue)
       {
          bestmove = move;
@@ -240,7 +250,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
-      if (!see(board, move, -75))
+      if (!see(board, move, -65*depth))
       {
          continue;
       }
@@ -248,7 +258,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       board.makeMove(move);
       int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       board.unmakeMove(move);
-
 
       if (score > bestScore)
       {
