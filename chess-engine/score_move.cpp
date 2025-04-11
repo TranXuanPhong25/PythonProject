@@ -78,7 +78,7 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
             //  Winning captures (SEE > 0) get bonus
             score +=  (GoodCaptureScore * see(board, move, -107));;
         }
-
+        else
         // promotions
         if (promoted(move))
         {
