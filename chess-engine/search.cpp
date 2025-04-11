@@ -60,7 +60,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    bool ttHit = false;
    bool is_pvnode = (beta - alpha) > 1;
 
-   TTEntry &tte = table->probe_entry(board.hashKey, ttHit, ply);
+   TTEntry &tte = table->probe_entry(board.hashKey, ttHit );
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
    if (!is_pvnode && ttHit)
    {
@@ -110,7 +110,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    }
    int flag = bestValue >= beta ? HFBETA : HFALPHA;
 
-   table->store(board.hashKey, flag, bestmove, 0, score_to_tt(bestValue, ply), standPat, ply, is_pvnode);
+   table->store(board.hashKey, flag, bestmove, 0, score_to_tt(bestValue, ply), standPat);
 
    return bestValue;
 }
@@ -127,7 +127,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
    // TT lookup
    bool ttHit;
-   TTEntry &entry = table->probe_entry(posKey, ttHit, ply);
+   TTEntry &entry = table->probe_entry(posKey, ttHit);
    bool is_pvnode = (beta - alpha) > 1;
    int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
    if (!is_pvnode && ttHit && entry.depth >= depth)
@@ -140,11 +140,36 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       if (entry.flag == HFBETA && entry.score >= beta)
          return beta;
    }
-   bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
-   // Get static evaluation for pruning decisions
+   bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+   bool isRoot = (ply == 0);
+   int staticEval;
    int eval = 0;
 
-   if (!inCheck && !is_pvnode && ply != 0)
+   if (ttHit)
+   {
+      staticEval = entry.eval;
+      eval = tt_score;
+   }
+   else
+   {
+      staticEval = evaluate(board);
+   }
+   // Reverse Futility Pruning
+   // Only apply at non-PV nodes, not in check, and at shallow depths
+   if (!is_pvnode && !inCheck && depth <= 8 && eval >= beta)
+   {
+      // The margin increases with depth
+      int margin = 120 * depth;
+
+      // If static eval is well above beta, assume position is too good
+      // and will lead to a beta cutoff anyway
+      if (staticEval - margin >= beta)
+      {
+         return beta; // Return beta as a lower bound
+      }
+   }
+
+   if (!inCheck && !is_pvnode && !isRoot)
    {
 
       /* Null move pruning
@@ -198,7 +223,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          // Stalemate - return draw score
          score = 0;
       }
-      table->store(posKey, HFEXACT, NO_MOVE, depth, score, score, ply, true);
+      table->store(posKey, HFEXACT, NO_MOVE, depth, score, score);
       return score;
    }
 
@@ -215,19 +240,15 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
-      if (!see(board, move, -50))
+      if (!see(board, move, -75))
       {
          continue;
       }
-      if (ttHit)
-      {
-         eval == tt_score;
-      }
 
       board.makeMove(move);
-      // Negamax recursively calls with inverted bounds
       int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       board.unmakeMove(move);
+
 
       if (score > bestScore)
       {
@@ -257,7 +278,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // Store position in TT
-   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board), ply, is_pvnode);
+   table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board));
 
    return bestScore;
 }
@@ -320,7 +341,7 @@ Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table)
          alpha = std::max(alpha, score);
       }
    }
-   table->store(board.hashKey, HFEXACT, bestMove, depth, bestScore, evaluate(board), 0, true);
+   table->store(board.hashKey, HFEXACT, bestMove, depth, bestScore, evaluate(board));
 
    return bestMove;
 }
