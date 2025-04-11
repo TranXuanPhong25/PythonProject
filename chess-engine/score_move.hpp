@@ -30,3 +30,8 @@ void clearHistory();
 
 
 void scoreMoves(Movelist &moves, Board &board,Move ttMove = NO_MOVE,int ply =0);
+void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move) ;
+
+void pickNextMove(const int& moveNum, Movelist &list);
+
+

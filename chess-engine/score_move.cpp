@@ -73,9 +73,6 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
         else if (victim != None)
         {
             score += mvv_lva[attacker][victim];
-            // TODO: implement SEE
-            // SEE = static exchange evaluation
-            //  Winning captures (SEE > 0) get bonus
             score +=  (GoodCaptureScore * see(board, move, -107));;
         }
         else
@@ -108,3 +105,41 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
         moves[i].value = score;
     }
 }
+void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move) {
+
+    // Loop through moves in movelist.
+    for (int i = 0; i < list.size; i++) {
+        Piece victim = board.pieceAtB(to(list[i].move));
+        Piece attacker = board.pieceAtB(from(list[i].move));
+        if (list[i].move == tt_move) {
+            list[i].value = 20000000;
+        } else if (victim != None) {
+            // If it's a capture move, we score using MVVLVA (Most valuable
+            // victim, Least Valuable Attacker)
+            list[i].value = mvv_lva[attacker][victim] +
+                            (GoodCaptureScore * see(board, list[i].move, -107));
+        }
+    }
+}
+
+void pickNextMove(const int& moveNum, Movelist &list)
+{
+    ExtMove temp;
+    int index = 0;
+    int bestscore = -INF_BOUND;
+    int bestnum = moveNum;
+
+    for (index = moveNum; index < list.size; ++index) {
+
+        if (list[index].value > bestscore) {
+            bestscore = list[index].value;
+            bestnum = index;
+        }
+    }
+
+    temp = list[moveNum];
+    list[moveNum] = list[bestnum]; // Sort the highest score move to highest.
+    list[bestnum] = temp;
+}
+
+
