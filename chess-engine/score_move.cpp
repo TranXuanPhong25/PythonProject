@@ -108,3 +108,25 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
         moves[i].value = score;
     }
 }
+
+void pickNextMove(const int& moveNum, Movelist &list)
+{
+    ExtMove temp;
+    int index = 0;
+    int bestscore = -INF_BOUND;
+    int bestnum = moveNum;
+
+    for (index = moveNum; index < list.size; ++index) {
+
+        if (list[index].value > bestscore) {
+            bestscore = list[index].value;
+            bestnum = index;
+        }
+    }
+
+    temp = list[moveNum];
+    list[moveNum] = list[bestnum]; // Sort the highest score move to highest.
+    list[bestnum] = temp;
+}
+
+
