@@ -79,6 +79,10 @@ int evaluate(const Board &board)
    if (popcount(board.pieces(BISHOP, Black)) >= 2)
       score -= 30;
 
+   // Add tempo bonus
+   constexpr int TEMPO_BONUS = 28; // Adjust this value as needed
+   score += (board.sideToMove == White ? TEMPO_BONUS : -TEMPO_BONUS);
+
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
 }
