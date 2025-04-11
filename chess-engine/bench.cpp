@@ -9,6 +9,9 @@ void benchSearch(int maxDepth, TranspositionTable *table)
        "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+       "r1b1k2r/ppp1Pppp/2n5/6B1/8/2N2p2/PPP2PPP/R3KB1R w KQkq - 0 1", 
+
+
        "8/8/8/8/5kp1/P7/8/1K1N4 w - - 0 1",  // Kc2 - mate
        "8/8/8/5N2/8/p7/8/2NK3k w - - 0 1",   // Na2 - mate
        "8/3k4/8/8/8/4B3/4KB2/2B5 w - - 0 1", // draw,
