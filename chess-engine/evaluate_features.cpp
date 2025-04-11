@@ -51,31 +51,31 @@ int evaluatePawnStructure(const Board &board) {
 //     return score;
 // }
 
-// // Center Control: reward for occupying/attacking center (d4/e4/d5/e5)
-// int evaluateCenterControl(const Board& board) {
-//     int score = 0;
-//     const Square centerSquares[] = { SQ_D4, SQ_E4, SQ_D5, SQ_E5 };
+// Center Control: reward for occupying/attacking center (d4/e4/d5/e5)
+int evaluateCenterControl(const Board& board) {
+    int score = 0;
+    const Square centerSquares[] = { SQ_D4, SQ_E4, SQ_D5, SQ_E5 };
 
-//     Board tempBoard = board;
+    Board tempBoard = board;
 
-//     for (Square sq : centerSquares) {
-//         auto piece = tempBoard.pieceAtB(sq);
-//         if (piece != None) {
-//             if (tempBoard.colorOf(sq) == White)
-//                 score += 5;
-//             else if (tempBoard.colorOf(sq) == Black)
-//                 score -= 5;
-//         }
+    for (Square sq : centerSquares) {
+        auto piece = tempBoard.pieceAtB(sq);
+        if (piece != None) {
+            if (tempBoard.colorOf(sq) == White)
+                score += 5;
+            else if (tempBoard.colorOf(sq) == Black)
+                score -= 5;
+        }
 
-//             // Check for attackers on the center squares
-//             U64 attackersWhite = tempBoard.attackersForSide(White, sq, tempBoard.occAll);
-//             U64 attackersBlack = tempBoard.attackersForSide(Black, sq, tempBoard.occAll);
+            // Check for attackers on the center squares
+            U64 attackersWhite = tempBoard.attackersForSide(White, sq, tempBoard.occAll);
+            U64 attackersBlack = tempBoard.attackersForSide(Black, sq, tempBoard.occAll);
         
-//             score += 3 * popcount(attackersWhite); // Bonus if white attacks center
-//             score -= 3 * popcount(attackersBlack); // Bonus if black attacks center
-//     }
-//     return score;
-// }
+            score += 3 * popcount(attackersWhite); // Bonus if white attacks center
+            score -= 3 * popcount(attackersBlack); // Bonus if black attacks center
+    }
+    return score;
+}
 
 
 int evaluateDoubledPawns(const Board &board, Color color) {

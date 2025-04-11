@@ -126,8 +126,8 @@ int evaluate(const Board &board)
    //  //Evaluate king safety
    //  score += (board.sideToMove == White ? evaluateKingSafety(board) : -evaluateKingSafety(board));
 
-   //  //Evaluate center control
-   //  score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
+    //Evaluate center control
+    score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
 
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
