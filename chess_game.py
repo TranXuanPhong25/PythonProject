@@ -10,7 +10,7 @@ load_dotenv()
 
 # Cấu hình Pygame
 pygame.init()
-WIDTH, HEIGHT = 800, 800
+WIDTH, HEIGHT = 600, 600
 SQUARE_SIZE = WIDTH // 8
 WHITE = (240, 217, 181)
 BROWN = (181, 136, 99)
