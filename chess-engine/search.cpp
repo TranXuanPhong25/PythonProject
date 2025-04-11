@@ -49,7 +49,8 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 {
    if (ply >= MAX_PLY - 1)
       return evaluate(board);
-
+   if (board.isRepetition())
+      return 0;
    int standPat = evaluate(board);
    if (standPat >= beta)
       return beta;
@@ -114,7 +115,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    return bestValue;
 }
-// Minimax search with alpha-beta pruning
+
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
    if (depth <= 0)
