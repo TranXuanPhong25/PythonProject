@@ -140,9 +140,39 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       if (entry.flag == HFBETA && entry.score >= beta)
          return beta;
    }
+   bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
+   // Get static evaluation for pruning decisions
+   int eval = 0;
 
+   if (!inCheck && !is_pvnode && ply != 0)
+   {
+
+      /* Null move pruning
+       * If we give our opponent a free move and still maintain beta, we prune
+       * some nodes.
+       */
+      if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+      {
+         int R = 2;
+         // Skip null move in endgame positions (simplistic approach)
+         if (getPieceCounts(board, board.sideToMove) > 5) // Adjusted threshold for better tuning
+         {
+            board.makeNullMove();
+            int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1); // Use a reduction factor R
+            board.unmakeNullMove();
+
+            if (nullScore >= beta)
+            {
+               if (nullScore > ISMATE)
+               {
+                  nullScore = beta;
+               }
+               return nullScore; // Beta cutoff
+            }
+         }
+      }
+   }
    Movelist moves;
-
    if (board.sideToMove == White)
    {
       Movegen::legalmoves<White, ALL>(board, moves);
@@ -152,7 +182,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
 
-   bool inCheck = (board.sideToMove == White) ? board.isSquareAttacked(Black, board.KingSQ(White)) : board.isSquareAttacked(White, board.KingSQ(Black));
    if (static_cast<int>(moves.size) == 0)
    {
       // Check for checkmate or stalemate
@@ -183,7 +212,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    int bestScore = -INF_BOUND;
    Move bestMove = NO_MOVE;
    uint8_t nodeFlag = HFALPHA;
-   int eval = 0;
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
@@ -195,33 +223,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       {
          eval == tt_score;
       }
-      if (!inCheck && !is_pvnode && ply != 0)
-      {
 
-         /* Null move pruning
-          * If we give our opponent a free move and still maintain beta, we prune
-          * some nodes.
-          */
-         if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
-         {
-            int R = 2;
-            // Skip null move in endgame positions (simplistic approach)
-            if (getPieceCounts(board, board.sideToMove) > 5) // Adjusted threshold for better tuning
-            {
-               board.makeNullMove();
-               int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1); // Use a reduction factor R
-               board.unmakeNullMove();
-
-               if (nullScore >= beta)
-               {
-                  if(nullScore > ISMATE){
-                     nullScore = beta;
-                  }
-                  return nullScore; // Beta cutoff
-               }  
-            }
-         }
-      }
       board.makeMove(move);
       // Negamax recursively calls with inverted bounds
       int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
