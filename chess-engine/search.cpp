@@ -77,7 +77,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    else
       Movegen::legalmoves<Black, CAPTURE>(board, captures);
 
-   scoreMoves(captures, board, tte.move,ply);
+   scoreMoves(captures, board, tte.move, ply);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
 
    for (int i = 0; i < captures.size; i++)
@@ -129,7 +129,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    bool ttHit;
    TTEntry &entry = table->probe_entry(posKey, ttHit, ply);
    bool is_pvnode = (beta - alpha) > 1;
-
+   int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
    if (!is_pvnode && ttHit && entry.depth >= depth)
    {
       // Use the value from TT based on bound type
@@ -183,7 +183,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    int bestScore = -INF_BOUND;
    Move bestMove = NO_MOVE;
    uint8_t nodeFlag = HFALPHA;
-
+   int eval = 0;
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
@@ -191,31 +191,34 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       {
          continue;
       }
-      // Add this to your negamax function before move generation
-      if (depth >= 3 && !inCheck && !is_pvnode)
+      if (ttHit)
       {
-         // Skip null move in endgame positions (simplistic approach)
-         if (getPieceCounts(board,board.sideToMove) < 12)
-         { // Only use in middlegame
-            board.makeNullMove();
-            int nullScore = -negamax(board, depth - 1 - 2, -beta, -alpha, table, ply + 1);
-            board.unmakeNullMove();
+         eval == tt_score;
+      }
+      if (!inCheck && !is_pvnode && ply != 0)
+      {
 
-            if (nullScore >= beta)
+         /* Null move pruning
+          * If we give our opponent a free move and still maintain beta, we prune
+          * some nodes.
+          */
+         if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+         {
+            int R = 3 + depth / 3 + std::min(3, (eval - beta) / 180);
+            // Skip null move in endgame positions (simplistic approach)
+            if (getPieceCounts(board, board.sideToMove) > 5) // Adjusted threshold for better tuning
             {
-               // Verification search can be added here for safety
-               if (depth >= 4)
-               {
-                  board.makeMove(move);
-                  int verificationScore = -negamax(board, depth - 1 - 1, -beta, -beta + 1, table, ply + 1);
-                  board.unmakeMove(move);
+               board.makeNullMove();
+               int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1); // Use a reduction factor R
+               board.unmakeNullMove();
 
-                  if (verificationScore >= beta)
-                  {
-                     return beta;
+               if (nullScore >= beta)
+               {
+                  if(nullScore > ISMATE){
+                     nullScore = beta;
                   }
+                  return nullScore; // Beta cutoff
                }
-               return beta;
             }
          }
       }
@@ -236,15 +239,16 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
             if (alpha >= beta)
             {
-               if (!is_capture(board,move) && !promoted(move)) {
+               if (!is_capture(board, move) && !promoted(move))
+               {
                   addKillerMove(move, ply);
-                  
+
                   // Also update history table for quiet moves
                   updateHistory(board, move, depth);
-              }
-              
-              nodeFlag = HFBETA;
-              break; // Beta cutoff
+               }
+
+               nodeFlag = HFBETA;
+               break; // Beta cutoff
             }
          }
       }
