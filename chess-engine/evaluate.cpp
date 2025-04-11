@@ -1,4 +1,5 @@
 #include "evaluate.hpp"
+#include "evaluate_features.hpp"
 #include "chess.hpp"
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
@@ -36,41 +37,72 @@ int evaluate(const Board &board)
    // Material counting using bitboards for efficiency
    for (PieceType pt = PAWN; pt <= KING; ++pt)
    {
-      Bitboard whitePieces = board.pieces(pt, White);
-      Bitboard blackPieces = board.pieces(pt, Black);
+       Bitboard whitePieces = board.pieces(pt, White);
+       Bitboard blackPieces = board.pieces(pt, Black);
 
-      // Process white pieces
-      while (whitePieces)
-      {
-         Square sq = static_cast<Square>(pop_lsb(whitePieces)); // Get and remove the least significant bit
-         score += PIECE_VALUES[pt];        // Add material value
-         if (pt == KING)
-         {
-            // Interpolate between middlegame and endgame king tables
-            score += KING_MG_PST[sq] * (1.0f - endgameWeight) + KING_EG_PST[sq] * endgameWeight;
-         }
-         else
-         {
-            score += PAWN_PST[sq]; // Add piece-square table bonus
-         }
-      }
+       // WHITE
+       while (whitePieces)
+       {
+           Square sq = static_cast<Square>(pop_lsb(whitePieces));
+           score += PIECE_VALUES[pt];
 
-      // Process black pieces
-      while (blackPieces)
-      {
-         Square sq = static_cast<Square>(pop_lsb(blackPieces)); // Get and remove the least significant bit
-         score -= PIECE_VALUES[pt];        // Subtract material value
-         if (pt == KING)
-         {
-            // Interpolate between middlegame and endgame king tables
-            score -= KING_MG_PST[getFlippedSquare(sq)] * (1.0f - endgameWeight) +
-                     KING_EG_PST[getFlippedSquare(sq)] * endgameWeight;
-         }
-         else
-         {
-            score -= PAWN_PST[getFlippedSquare(sq)]; // Subtract piece-square table bonus
-         }
-      }
+           int idx = squareToIndex(sq);
+
+           switch (pt)
+           {
+           case PAWN:
+               score += PAWN_PST[idx];
+               break;
+           case KNIGHT:
+               score += KNIGHT_PST[idx];
+               break;
+           case BISHOP:
+               score += BISHOP_PST[idx];
+               break;
+           case ROOK:
+               score += ROOK_PST[idx];
+               break;
+           case QUEEN:
+               score += QUEEN_PST[idx];
+               break;
+           case KING:
+               score += KING_MG_PST[idx] * (1.0f - endgameWeight) +
+                        KING_EG_PST[idx] * endgameWeight;
+               break;
+           }
+       }
+
+       // BLACK
+       while (blackPieces)
+       {
+           Square sq = static_cast<Square>(pop_lsb(blackPieces));
+           score -= PIECE_VALUES[pt];
+
+           int flippedIdx = getFlippedSquare(sq);
+
+           switch (pt)
+           {
+           case PAWN:
+               score -= PAWN_PST[flippedIdx];
+               break;
+           case KNIGHT:
+               score -= KNIGHT_PST[flippedIdx];
+               break;
+           case BISHOP:
+               score -= BISHOP_PST[flippedIdx];
+               break;
+           case ROOK:
+               score -= ROOK_PST[flippedIdx];
+               break;
+           case QUEEN:
+               score -= QUEEN_PST[flippedIdx];
+               break;
+           case KING:
+               score -= KING_MG_PST[flippedIdx] * (1.0f - endgameWeight) +
+                        KING_EG_PST[flippedIdx] * endgameWeight;
+               break;
+           }
+       }
    }
 
    // Bishop pair bonus
@@ -78,6 +110,24 @@ int evaluate(const Board &board)
       score += 30;
    if (popcount(board.pieces(BISHOP, Black)) >= 2)
       score -= 30;
+
+    // Rook pair bonus
+    if (popcount(board.pieces(ROOK, White)) >= 2)
+    score += 20;
+    if (popcount(board.pieces(ROOK, Black)) >= 2)
+    score -= 20;
+
+   //  //Evaluate PawnStructure
+    score += (board.sideToMove == White ? evaluatePawnStructure(board) : -evaluatePawnStructure(board));
+
+   //  //Evaluate mobility
+   //  score += (board.sideToMove == White ? evaluateMobility(board) : -evaluateMobility(board));
+
+   //  //Evaluate king safety
+   //  score += (board.sideToMove == White ? evaluateKingSafety(board) : -evaluateKingSafety(board));
+
+   //  //Evaluate center control
+   //  score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
 
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
