@@ -204,7 +204,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
           */
          if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
          {
-            int R = 3 + depth / 3 + std::min(3, (eval - beta) / 180);
+            int R = 2;
             // Skip null move in endgame positions (simplistic approach)
             if (getPieceCounts(board, board.sideToMove) > 5) // Adjusted threshold for better tuning
             {
@@ -218,7 +218,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                      nullScore = beta;
                   }
                   return nullScore; // Beta cutoff
-               }
+               }  
             }
          }
       }
