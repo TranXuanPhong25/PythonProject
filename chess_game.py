@@ -9,8 +9,9 @@ import time
 load_dotenv()
 
 # Cấu hình Pygame
+LAST_MOVE = (255, 255, 153)  # Light yellow color for last move highlighting
 pygame.init()
-WIDTH, HEIGHT = 600, 600
+WIDTH, HEIGHT = 800, 800
 SQUARE_SIZE = WIDTH // 8
 WHITE = (240, 217, 181)
 BROWN = (181, 136, 99)
@@ -24,6 +25,9 @@ ENGINE_PATH = os.getenv("ENGINE_PATH", "chess-engine/bin/uci.exe").split()
 MENU = 0
 PLAYING = 1
 GAME_OVER = 2
+# Add these variables near the beginning of your game initialization
+last_move_from = None
+last_move_to = None
 
 # Load ảnh quân cờ
 piece_images = {}
@@ -74,17 +78,29 @@ def get_promotion_choice(screen):
                         return pieces[i]
 
 # Hàm vẽ bàn cờ
-def draw_board(screen, board, selected_square, player_time, ai_time, depth):
+def draw_board(screen, board, selected_square, player_time, ai_time, depth, last_move_from=None, last_move_to=None):
     for row in range(8):
         for col in range(8):
             color = WHITE if (row + col) % 2 == 0 else BROWN
-            if selected_square is not None and selected_square == chess.square(col, 7 - row):
-                color = HIGHLIGHT  # Highlight ô đang chọn
+            # Square position
+            square = chess.square(col, 7 - row)
+
+            # Highlight selected square
+            if selected_square is not None and selected_square == square:
+                color = HIGHLIGHT
+            # Highlight last move squares
+            elif last_move_from is not None and square == last_move_from:
+                color = LAST_MOVE
+            elif last_move_to is not None and square == last_move_to:
+                color = LAST_MOVE
+
             pygame.draw.rect(screen, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
-            piece = board.piece_at(chess.square(col, 7 - row))
+            piece = board.piece_at(square)
             if piece:
                 screen.blit(piece_images[piece.symbol()], (col * SQUARE_SIZE, row * SQUARE_SIZE))
+
+
     pygame.draw.rect(screen, color, (8 * SQUARE_SIZE, 0 * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
     # Hiển thị thời gian và độ sâu
@@ -181,7 +197,7 @@ while running:
 
     elif game_state == PLAYING:
         screen.fill((0, 0, 0))
-        draw_board(screen, board, selected_square, player_time, ai_time, ai_depth)
+        draw_board(screen, board, selected_square, player_time, ai_time, ai_depth,last_move_from, last_move_to)
         pygame.display.flip()
 
         for event in pygame.event.get():
@@ -230,6 +246,8 @@ while running:
                         move = chess.Move(selected_square, square)
 
                     if move in board.legal_moves:
+                        last_move_from = selected_square
+                        last_move_to = square
                         board.push(move)
                         player_time = time.time() - start_time  # Đo thời gian người chơi
                         player_turn = False  # Đến lượt AI
@@ -245,6 +263,9 @@ while running:
                 # Sử dụng độ sâu và thời gian được chọn
                 result = engine.play(board, chess.engine.Limit(depth=ai_depth, time=AI_TIME_LIMIT))
                 if result.move is not None:
+                    # Add these variables near the beginning of your game initialization
+                    last_move_from = result.move.from_square
+                    last_move_to = result.move.to_square
                     board.push(result.move)
                 else:
                     # If engine returned None, select a legal move
