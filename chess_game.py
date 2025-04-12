@@ -9,7 +9,7 @@ import time
 load_dotenv()
 
 # Cấu hình Pygame
-LAST_MOVE = (255, 255, 153)  # Light yellow color for last move highlighting
+LAST_MOVE = (255, 255, 0)  # Light yellow color for last move highlighting
 pygame.init()
 WIDTH, HEIGHT = 840, 860
 SQUARE_SIZE = 100
@@ -20,6 +20,10 @@ FONT = pygame.font.Font(None, 36)  # Font hiển thị thời gian
 MENU_FONT = pygame.font.Font(None, 48)  # Font cho menu
 AI_TIME_LIMIT = float(os.getenv("AI_TIME_LIMIT", 10))
 ENGINE_PATH = os.getenv("ENGINE_PATH", "chess-engine/bin/uci.exe").split()
+
+# Add this constant near the top with your other color definitions
+LEGAL_MOVE_BORDER = (255, 0, 0)  # Red border for legal moves
+LEGAL_MOVE_INDICATOR = (255, 255, 255, 170)  # Semi-transparent red for move indicators
 
 # Game states
 MODE_SELECTION = -1  # New state for mode selection
@@ -107,6 +111,28 @@ def draw_board(screen, board, selected_square, player_time, ai_time, depth, last
             if piece:
                 screen.blit(piece_images[piece.symbol()], (20+col * SQUARE_SIZE, 40+row * SQUARE_SIZE))
 
+    # Add this code to show legal moves with center circles
+    if selected_square is not None:
+        for move in board.legal_moves:
+            if move.from_square == selected_square:
+                # Draw a circle in the center of possible destination squares
+                to_col = chess.square_file(move.to_square)
+                to_row = 7 - chess.square_rank(move.to_square)
+                
+                # Calculate center position of the square
+                center_x = 20 + to_col * SQUARE_SIZE + SQUARE_SIZE // 2
+                center_y = 40 + to_row * SQUARE_SIZE + SQUARE_SIZE // 2
+                
+                # Create a surface with per-pixel alpha for semi-transparency
+                circle_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+                
+                # Draw circle on the surface - using 1/4 of square size for radius
+                circle_radius = SQUARE_SIZE // 6
+                pygame.draw.circle(circle_surface, LEGAL_MOVE_INDICATOR, 
+                                  (SQUARE_SIZE // 2, SQUARE_SIZE // 2), circle_radius)
+                
+                # Blit the circle surface onto the screen
+                screen.blit(circle_surface, (20 + to_col * SQUARE_SIZE, 40 + to_row * SQUARE_SIZE))
 
     label_font = pygame.font.Font(None, 24)
 
@@ -170,7 +196,7 @@ def draw_mode_selection(screen):
     title = MENU_FONT.render("Select Game Mode", True, (255, 255, 255))
     screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 100))
     
-    button_width = 300
+    button_width = 370
     button_height = 60
     button_spacing = 20
     
