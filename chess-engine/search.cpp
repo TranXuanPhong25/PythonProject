@@ -204,6 +204,13 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       futilityPruning = (staticEval + futilityMargin <= alpha);
    }
 
+   // Static Null Move Pruning
+   if (!is_pvnode && !inCheck && depth <= 5) {
+      int margin = depth <= 3 ? 90 * depth : 300 + 50 * (depth - 3);
+      if (staticEval - margin >= beta)
+         return beta;
+   }
+
    // Razoring - if we're far below alpha, try qsearch
    if (!is_pvnode && !inCheck && depth <= 3 && staticEval + 350 * depth < alpha)
    {
