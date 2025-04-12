@@ -112,8 +112,7 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
         // Add mobility score to the move's score
         score += mobilityScore;
 
-        // Restore the board state
-        board.unmakeMove(move);
+        // Restore the board state (handled by updateMobility)
 
         moves[i].value = score;
     }
