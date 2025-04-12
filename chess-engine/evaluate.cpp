@@ -14,20 +14,6 @@ inline int getFlippedSquare(Square sq)
    return squareToIndex(sq) ^ 56; // Flips vertically
 }
 
-// Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
-inline float getGamePhase(const Board &board)
-{
-   int remainingMaterial =
-       popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
-       popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KNIGHT_VALUE +
-       popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BISHOP_VALUE +
-       popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * ROOK_VALUE +
-       popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QUEEN_VALUE;
-
-   float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
-   return phase;
-}
-
 int evaluate(const Board &board)
 {
    int score = 0;
@@ -69,6 +55,8 @@ int evaluate(const Board &board)
                score += KING_MG_PST[idx] * (1.0f - endgameWeight) +
                         KING_EG_PST[idx] * endgameWeight;
                break;
+            default:
+               break;
            }
        }
 
@@ -100,6 +88,8 @@ int evaluate(const Board &board)
            case KING:
                score -= KING_MG_PST[flippedIdx] * (1.0f - endgameWeight) +
                         KING_EG_PST[flippedIdx] * endgameWeight;
+               break;
+            default:
                break;
            }
        }
