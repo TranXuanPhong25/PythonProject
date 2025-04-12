@@ -20,37 +20,6 @@ int evaluatePawnStructure(const Board &board) {
     return score;
 }
 
-
-// // Mobility: count legal moves for each side
-// int evaluateMobility(const Board& board) {
-//     int score = 0;
-//     std::vector<Move> moves = board.generate_legal_moves();  // Initialize in Chess.hpp and define in Evaluate_features.hpp
-//     int moveCount = moves.size();
-//     return board.sideToMove == White ? moveCount : -moveCount;
-// }
-
-// Bitboard king_safety_zone(Square kingSq, Color color) {
-//     // The king's safety zone is the squares around the king using the king's attack pattern
-//     return KingAttacks(kingSq);
-// }
-
-// // King Safety: placeholder
-// int evaluateKingSafety(const Board& board) {
-//     int score = 0;
-
-//     for (Color color : {White, Black}) {
-//         Square kingSq = board.KingSQ(color);
-//         Bitboard kingZone = king_safety_zone(kingSq, color);
-//         Bitboard friendlyPawns = board.pieces(PAWN, color);
-//         int pawnCover = popcount(kingZone & friendlyPawns);
-
-//         if (color == White) score += pawnCover * 5;
-//         else score -= pawnCover * 5;
-//     }
-
-//     return score;
-// }
-
 // Center Control: reward for occupying/attacking center (d4/e4/d5/e5)
 int evaluateCenterControl(const Board& board) {
     int score = 0;
