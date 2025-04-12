@@ -420,56 +420,70 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
     Move bestMove = NO_MOVE;
     int prevScore = 0;  // Previous iteration score
     
-    // Use full-width window for first depth
+    // Use full-width window for first three depths
     for (int depth = 1; depth <= maxDepth; depth++)
     {
-        // For shallow depths, use full window
-        if (depth <= 2) {
-            Move currentBestMove = getBestMoveIterative(board, depth, table, -INF_BOUND, INF_BOUND);
+        int score;
+        Move currentBestMove;
+        
+        // For shallow depths or early game positions, use full window
+        if (depth <= 3) {
+            currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
             if (currentBestMove != NO_MOVE) {
                 bestMove = currentBestMove;
             }
-            bool ttHit;
-            // Get the score from TT for use in next iteration
-            TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
-            prevScore = entry.score;
+            prevScore = score;
             continue;
         }
         
         // For deeper depths, use aspiration window
-        int alpha = prevScore - 32;  // Start with narrow window
-        int beta = prevScore + 32;
-        int score;
+        // Fixed window size to start - smaller in opening positions
+        int windowSize = 25;  // Smaller initial window
+        int alpha = prevScore - windowSize;
+        int beta = prevScore + windowSize;
         
         // Try with increasingly wider windows until success
+        int failCount = 0;
         while (true) {
-            Move currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
+            // Ensure our bounds are within limits
+            alpha = std::max(-INF_BOUND, alpha);
+            beta = std::min(static_cast<int>(INF_BOUND), beta);
             
+            currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
+            
+            // Store any valid move we find
+            if (currentBestMove != NO_MOVE) {
+                bestMove = currentBestMove;
+            }
+            
+            // Search successful - move to next depth
+            if (score > alpha && score < beta) {
+                break;
+            }
+            
+            failCount++;
+            
+            // After just 2 fails with opening positions, use full window
+            if (failCount >= 2) {
+                currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
+                if (currentBestMove != NO_MOVE) {
+                    bestMove = currentBestMove;
+                }
+                break;
+            }
+            
+            // Adjust window based on failure type
             if (score <= alpha) {
-                // Failed low - widen the window below
-                alpha = std::max(-INF_BOUND, alpha - 64);
-                beta = prevScore + 16;  // Keep narrower upper bound
+                // Failed low - widen below
+                alpha = alpha - windowSize * 3;  // More aggressive widening
             }
-            else if (score >= beta) {
-                // Failed high - widen the window above
-                beta = std::min(static_cast<int>(INF_BOUND), beta + 64); 
-                alpha = prevScore - 16;  // Keep narrower lower bound
-            }
-            else {
-                // Score within window - success
-                if (currentBestMove != NO_MOVE) {
-                    bestMove = currentBestMove;
-                }
-                break;
+            else { // score >= beta
+                // Failed high - widen above
+                beta = beta + windowSize * 3;  // More aggressive widening
             }
             
-            // If window is already full width, break to avoid infinite loop
-            if (alpha <= -INF_BOUND + 100 && beta >= INF_BOUND - 100) {
-                if (currentBestMove != NO_MOVE) {
-                    bestMove = currentBestMove;
-                }
-                break;
-            }
+            // Triple window size for next attempt
+            windowSize *= 3;
         }
         
         // Save this depth's score for next iteration
