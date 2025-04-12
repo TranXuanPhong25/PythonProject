@@ -3,10 +3,11 @@
 #include "evaluate_features.hpp"
 
 #include <algorithm>
+#include <cmath>
 // Add this function to calculate LMR reduction dynamically
 int calculateReduction(Board&board,int depth, int moveIndex, bool isPV, Move move, int ply) {
    // Base reduction
-   int R = 1;
+   int R = std::log2(depth*4) * std::log2(moveIndex + 1) / 1.5;
    
    // Depth and move count adjustments
    R += (depth >= 6) ? 1 : 0;
@@ -210,54 +211,114 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          return beta;
    }
 
-   // Null move pruning with safety limits
+   // Enhanced Null Move Pruning with dynamic depth reduction and improved safety
    if (!inCheck && !is_pvnode && !isRoot) {
       if (board.nonPawnMat(board.sideToMove) && depth >= 3 && 
          (!ttHit || entry.flag != HFALPHA || eval >= beta)) {
         
+         // Check if position is suitable for null move pruning
          if (ply < MAX_PLY - 10) {
-            // Dynamic R based on depth and advantage
+            // Calculate dynamic R based on multiple factors
             int R = 3;  // Base reduction
             
-            // Adjust R based on position evaluation
-            bool hasAdvantage = eval >= beta + 80;
-            if (hasAdvantage) R++;
-            if (depth >= 8) R++;
+            // --- ENHANCEMENT 1: More adaptive R calculation ---
+            // Scale R based on evaluation relative to beta
+            int eval_margin = eval - beta;
+            if (eval_margin > 200) R++;
+            if (eval_margin > 500) R++;
             
-            // More conservative for endgames
-            if (getPieceCounts(board, White) + getPieceCounts(board, Black) <= 12)
-               R = std::max(2, R - 1);
+            // Scale R based on depth
+            if (depth >= 6) R++;
+            if (depth >= 9) R++;
+            
+            // --- ENHANCEMENT 2: Material-based adjustments ---
+            int totalPieces = getPieceCounts(board, White) + getPieceCounts(board, Black);
+            int ourPieces = getPieceCounts(board, board.sideToMove);
+            int pawnCount = popcount(board.pieces(PAWN, board.sideToMove));
+            
+            // Reduce R in endgames for safety
+            if (totalPieces <= 12) {
+                R = std::max(2, R - 1);
+            }
+            
+            // More reduction when we have material advantage
+            Bitboard ourMinors = board.pieces(KNIGHT, board.sideToMove) | board.pieces(BISHOP, board.sideToMove);
+            Bitboard theirMinors = board.pieces(KNIGHT, ~board.sideToMove) | board.pieces(BISHOP, ~board.sideToMove);
+            if (popcount(ourMinors) > popcount(theirMinors) + 1) {
+                R++;
+            }
+            
+            // --- ENHANCEMENT 3: Improved zugzwang detection ---
+            bool isPawn = pawnCount > 0;
+            bool hasMajorPiece = popcount(board.pieces(ROOK, board.sideToMove) | 
+                                          board.pieces(QUEEN, board.sideToMove)) > 0;
+            bool hasMultipleMinors = popcount(ourMinors) >= 2;
+            
+            // Positions likely to be zugzwang:
+            // 1. Few pieces total with no pawns
+            // 2. Only king and pawns remain
+            // 3. Endgame with just 1-2 pieces + king
+            bool likelyZugzwang = 
+                (totalPieces <= 7 && !isPawn) ||
+                (ourPieces <= 6 && pawnCount == ourPieces - 1) || // King + pawns only
+                (ourPieces <= 3 && !hasMajorPiece && !hasMultipleMinors);
                 
-            // Adaptive zugzwang detection
-            bool pawnless = board.pieces(PAWN, board.sideToMove) == 0;
-            bool fewPieces = getPieceCounts(board, board.sideToMove) <= 3;
-            bool likelyZugzwang = fewPieces || (pawnless && getPieceCounts(board, board.sideToMove) <= 5);
+            // --- ENHANCEMENT 4: Verification search improvements ---
+            // Determine when verification is needed
+            bool criticalPosition = depth >= 6 || (ourPieces <= 5 && totalPieces <= 12);
             
             if (!likelyZugzwang) {
-               board.makeNullMove();
+                // Perform null move search
+                board.makeNullMove();
                 
-               // Use reduced-depth search with tighter bounds
-               int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
-               board.unmakeNullMove();
+                // --- ENHANCEMENT 5: Reduced verification window ---
+                // Use tighter bounds for verification
+                int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
+                board.unmakeNullMove();
                 
-               if (nullScore >= beta) {
-                  // Dynamic verification threshold
-                  bool deepSearch = depth >= 6;
-                  bool endgamePosition = getPieceCounts(board, board.sideToMove) <= 4;
-                  bool needsVerification = endgamePosition && deepSearch;
+                if (nullScore >= beta) {
+                    // --- ENHANCEMENT 6: Smarter verification logic ---
+                    bool needsVerification = criticalPosition && 
+                                           // Additional check for endgames
+                                           (totalPieces <= 10 || 
+                                            // Verification when close to mate score
+                                            (nullScore > 9000) ||
+                                            // Less verification when way above beta
+                                            !(nullScore > beta + 300));
                     
-                  if (needsVerification) {
-                     // Adaptive verification depth
-                     int verificationDepth = depth / 2;
-                     verificationDepth = std::min(verificationDepth, 5);
+                    if (needsVerification) {
+                        // --- ENHANCEMENT 7: Adaptive verification depth ---
+                        // Use deeper verification for critical positions
+                        int verificationDepth;
                         
-                     int verificationScore = negamax(board, verificationDepth, beta - 1, beta, table, ply);
-                     if (verificationScore >= beta)
-                        return beta;
-                  } else {
-                     return beta;  // Safe to return without verification
-                  }
-               }
+                        if (nullScore > 9000) {
+                            // Deeper verification for potential mates
+                            verificationDepth = depth - 3;
+                        } else if (totalPieces <= 8) {
+                            // Deeper for very simplified positions
+                            verificationDepth = depth / 2 + 1;
+                        } else {
+                            // Standard verification
+                            verificationDepth = depth / 2;
+                        }
+                        
+                        // Cap verification depth
+                        verificationDepth = std::min(verificationDepth, depth - 2);
+                        verificationDepth = std::max(verificationDepth, 2);
+                        
+                        // Verify with reduced window
+                        int verificationScore = negamax(board, verificationDepth, beta - 1, beta, table, ply);
+                        if (verificationScore >= beta) {
+                            return beta;
+                        }
+                        // If verification fails, continue normal search
+                    } else {
+                        // --- ENHANCEMENT 8: Save in TT before returning ---
+                        // Store the cutoff in the transposition table
+                        table->store(posKey, HFBETA, NO_MOVE, depth, beta, staticEval);
+                        return beta;  // Safe to return without verification
+                    }
+                }
             }
          }
       }
