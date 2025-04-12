@@ -10,3 +10,4 @@ int evaluateDoubledPawns(const Board &board, Color color);
 int evaluateIsolatedPawns(const Board &board, Color color);
 int evaluatePassedPawns(const Board &board, Color color);
 int evaluateMobility(const Board &board, Color color);
+void updateMobility(Board &board, Move move, int &mobilityScore, Color color);

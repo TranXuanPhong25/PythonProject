@@ -1,4 +1,6 @@
 #include "search.hpp"
+#include "evaluate.hpp"
+#include "evaluate_features.hpp"
 
 #include <algorithm>
 
@@ -232,6 +234,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
     Move bestMove = NO_MOVE;
     uint8_t nodeFlag = HFALPHA;
     int movesSearched = 0;
+
+    // Initialize mobility score
+    int mobilityScore = evaluateMobility(board, board.sideToMove);
     
     // Main search loop with simplified LMR
     for (int i = 0; i < moves.size; i++)
@@ -248,6 +253,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
         
         if (futilityPruning && i > 0 && !isCapture && !isPromotion)
             continue;  // Skip this quiet move
+
+        // Update mobility incrementally
+        updateMobility(board, move, mobilityScore, board.sideToMove);
 
         board.makeMove(move);
         movesSearched++;
@@ -295,6 +303,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
         }
         
         board.unmakeMove(move);
+
+        // Restore mobility score
+        updateMobility(board, move, mobilityScore, board.sideToMove);
         
         // Update best score logic remains the same
         if (score > bestScore) {

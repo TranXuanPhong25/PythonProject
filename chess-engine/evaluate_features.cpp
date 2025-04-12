@@ -188,3 +188,27 @@ int evaluateMobility(const Board &board, Color color) {
 
     return static_cast<int>(mobility * middlegameWeight);
 }
+
+void updateMobility(Board &board, Move move, int &mobilityScore, Color color) {
+    Square fromS = from(move);
+    Square toS = to(move);
+    Piece movedPiece = board.pieceAtB(fromS);
+    Piece capturedPiece = board.pieceAtB(toS);
+
+    // Subtract mobility of the piece from its old square
+    mobilityScore -= popcount(board.attacksByPiece(type_of_piece(movedPiece), fromS, color) & ~board.Us(color));
+
+    // If a piece is captured, subtract its mobility
+    if (capturedPiece != None) {
+        mobilityScore -= popcount(board.attacksByPiece(type_of_piece(capturedPiece), toS, ~color) & ~board.Us(~color));
+    }
+
+    // Update the board state for the move
+    board.makeMove(move);
+
+    // Add mobility of the piece in its new square
+    mobilityScore += popcount(board.attacksByPiece(type_of_piece(movedPiece), toS, color) & ~board.Us(color));
+
+    // Restore the board state (if needed for further calculations)
+    board.unmakeMove(move);
+}
