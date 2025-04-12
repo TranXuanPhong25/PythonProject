@@ -227,6 +227,15 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          return beta;
    }
 
+   // Razoring - if we're far below alpha, try qsearch
+   if (!is_pvnode && !inCheck && depth <= 3 && staticEval + 350 * depth < alpha)
+   {
+      // Try directly going to quiescence search
+      int razorScore = quiescence(board, alpha - 1, alpha, table, ply);
+      if (razorScore < alpha)
+         return razorScore;
+   }
+
    // Move generation remains the same
    Movelist moves;
    if (board.sideToMove == White)
@@ -357,78 +366,86 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 }
 
 // Find the best move at the given depth
-Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table, 
+Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table,
                           int alpha, int beta)
 {
-    int score;
-    return getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
+   int score;
+   return getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
 }
 
 // Modified to return the score
-Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *table, 
-                                   int alpha, int beta, int* score)
+Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *table,
+                                   int alpha, int beta, int *score)
 {
-    Movelist moves;
-    if (board.sideToMove == White) {
-        Movegen::legalmoves<White, ALL>(board, moves);
-    }
-    else {
-        Movegen::legalmoves<Black, ALL>(board, moves);
-    }
-    
-    if (moves.size == 0) {
-        *score = 0; // Stalemate score
-        return NO_MOVE;
-    }
-    
-    // Check if we have a TT move for this position
-    Move ttMove = table->probeMove(board.hashKey);
-    if (ttMove != NO_MOVE) {
-        // Verify the move is legal
-        for (int i = 0; i < moves.size; i++) {
-            if (moves[i].move == ttMove) {
-                // Start with the TT move as best
-                break;
-            }
-        }
-    }
-    
-    Move bestMove = moves[0].move;
-    int bestScore = -INF_BOUND;
-    int originalAlpha = alpha;
-    
-    // Score and sort moves - put TT move first
-    scoreMoves(moves, board, ttMove, 0);
-    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
-    
-    for (int i = 0; i < moves.size; i++) {
-        Move move = moves[i].move;
-        board.makeMove(move);
-        int moveScore = -negamax(board, depth - 1, -beta, -alpha, table, 1);
-        board.unmakeMove(move);
-        
-        if (moveScore > bestScore) {
-            bestScore = moveScore;
-            bestMove = move;
-            
-            if (moveScore > alpha) {
-                alpha = moveScore;
-                
-                // Beta cutoff
-                if (alpha >= beta)
-                    break;
-            }
-        }
-    }
-    
-    // Store result in TT
-    uint8_t flag = bestScore <= originalAlpha ? HFALPHA : 
-                  (bestScore >= beta ? HFBETA : HFEXACT);
-    table->store(board.hashKey, flag, bestMove, depth, bestScore, evaluate(board));
-    
-    // Return the score through the pointer
-    *score = bestScore;
-    return bestMove;
+   Movelist moves;
+   if (board.sideToMove == White)
+   {
+      Movegen::legalmoves<White, ALL>(board, moves);
+   }
+   else
+   {
+      Movegen::legalmoves<Black, ALL>(board, moves);
+   }
+
+   if (moves.size == 0)
+   {
+      *score = 0; // Stalemate score
+      return NO_MOVE;
+   }
+
+   // Check if we have a TT move for this position
+   Move ttMove = table->probeMove(board.hashKey);
+   if (ttMove != NO_MOVE)
+   {
+      // Verify the move is legal
+      for (int i = 0; i < moves.size; i++)
+      {
+         if (moves[i].move == ttMove)
+         {
+            // Start with the TT move as best
+            break;
+         }
+      }
+   }
+
+   Move bestMove = moves[0].move;
+   int bestScore = -INF_BOUND;
+   int originalAlpha = alpha;
+
+   // Score and sort moves - put TT move first
+   scoreMoves(moves, board, ttMove, 0);
+   std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+
+   for (int i = 0; i < moves.size; i++)
+   {
+      Move move = moves[i].move;
+      board.makeMove(move);
+      int moveScore = -negamax(board, depth - 1, -beta, -alpha, table, 1);
+      board.unmakeMove(move);
+
+      if (moveScore > bestScore)
+      {
+         bestScore = moveScore;
+         bestMove = move;
+
+         if (moveScore > alpha)
+         {
+            alpha = moveScore;
+
+            // Beta cutoff
+            if (alpha >= beta)
+               break;
+         }
+      }
+   }
+
+   // Store result in TT
+   uint8_t flag = bestScore <= originalAlpha ? HFALPHA : (bestScore >= beta ? HFBETA : HFEXACT);
+   table->store(board.hashKey, flag, bestMove, depth, bestScore, evaluate(board));
+
+   // Return the score through the pointer
+   *score = bestScore;
+   return bestMove;
 }
 
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
