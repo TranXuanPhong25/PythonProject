@@ -53,7 +53,7 @@ void benchSearch(int maxDepth, TranspositionTable *table)
       Board board(fen);
       std::cout << "\n"<<index++<<" Testing position: " << fen << std::endl;
 
-      for (int depth = 5; depth <= maxDepth; depth++)
+      for (int depth = 7; depth <= maxDepth; depth++)
       {
          table->clear(); // Clear TT between iterations
 
