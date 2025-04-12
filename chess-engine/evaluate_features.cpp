@@ -126,3 +126,44 @@ int evaluatePassedPawns(const Board &board, Color color) {
 
     return bonus;
 }
+
+int evaluateMobility(const Board &board, Color color) {
+    int mobility = 0;
+
+    // Knights
+    Bitboard knights = board.pieces(KNIGHT, color);
+    while (knights) {
+        Square sq = poplsb(knights);
+        mobility += popcount(KnightAttacks(sq) & ~board.Us(color));
+    }
+
+    // Bishops
+    Bitboard bishops = board.pieces(BISHOP, color);
+    while (bishops) {
+        Square sq = poplsb(bishops);
+        mobility += popcount(BishopAttacks(sq, board.occAll) & ~board.Us(color));
+    }
+
+    // Rooks
+    Bitboard rooks = board.pieces(ROOK, color);
+    while (rooks) {
+        Square sq = poplsb(rooks);
+        mobility += popcount(RookAttacks(sq, board.occAll) & ~board.Us(color));
+    }
+
+    // Queens
+    Bitboard queens = board.pieces(QUEEN, color);
+    while (queens) {
+        Square sq = poplsb(queens);
+        mobility += popcount(QueenAttacks(sq, board.occAll) & ~board.Us(color));
+    }
+
+    // King
+    Bitboard king = board.pieces(KING, color);
+    if (king) {
+        Square sq = poplsb(king);
+        mobility += popcount(KingAttacks(sq) & ~board.Us(color));
+    }
+
+    return mobility;
+}
