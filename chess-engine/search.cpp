@@ -179,18 +179,34 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    {
       if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
       {
-         int R = 2;
-         if (getPieceCounts(board, board.sideToMove) > 5)
+         // Dynamic null move R based on depth and advantage
+         int R = 3 + depth / 4 + std::min(3, (staticEval - beta) / 200);
+
+         // Skip null move in suspected zugzwang positions
+         bool skipNullMove = getPieceCounts(board,board.sideToMove) <= 3 &&
+                             board.pieces(PAWN, board.sideToMove) == 0;
+
+         if (!skipNullMove)
          {
             board.makeNullMove();
             int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
             board.unmakeNullMove();
 
+            // Consider verification search for positions close to zugzwang
             if (nullScore >= beta)
             {
-               if (nullScore > ISMATE)
-                  nullScore = beta;
-               return nullScore;
+               // Optional verification for suspected zugzwang
+               if (getPieceCounts(board,board.sideToMove) <= 4 && R >= 4)
+               {
+                  // Verification search with reduced depth
+                  int verificationScore = negamax(board, depth - 3, beta - 1, beta, table, ply);
+                  if (verificationScore >= beta)
+                     return beta;
+               }
+               else
+               {
+                  return nullScore;
+               }
             }
          }
       }
