@@ -71,7 +71,7 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
         // Prioritize TT move
         if (move == ttMove)
         {
-            score = 20000;
+            score = PvMoveScore;
         }
         // capture
         else if (victim != None)
