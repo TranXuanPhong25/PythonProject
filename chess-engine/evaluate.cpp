@@ -92,9 +92,8 @@ int evaluate(const Board &board)
    //Evaluate center control
    score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
 
-   float mobilityWeight = (1.0f - endgameWeight) * 10; // Higher weight in the middlegame
    //Evaluate mobility
-   score += (board.sideToMove == White ? evaluateMobility(board, White) : -evaluateMobility(board, Black)) * mobilityWeight;
+   score += (board.sideToMove == White ? evaluateMobility(board, White) : -evaluateMobility(board, Black));
    
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;

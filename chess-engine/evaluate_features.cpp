@@ -134,36 +134,57 @@ int evaluateMobility(const Board &board, Color color) {
     Bitboard knights = board.pieces(KNIGHT, color);
     while (knights) {
         Square sq = poplsb(knights);
-        mobility += popcount(KnightAttacks(sq) & ~board.Us(color));
+        U64 attacks = KnightAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 3;                 // Weight: 3
+        mobility += popcount(attacks & board.Enemy(color)) * 2; // Bonus for attacking enemy pieces
     }
 
     // Bishops
     Bitboard bishops = board.pieces(BISHOP, color);
     while (bishops) {
         Square sq = poplsb(bishops);
-        mobility += popcount(BishopAttacks(sq, board.occAll) & ~board.Us(color));
+        U64 attacks = BishopAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 3;                               // Weight: 3
+        mobility += popcount(attacks & board.Enemy(color)) * 2;          // Bonus for attacking enemy pieces
     }
 
     // Rooks
     Bitboard rooks = board.pieces(ROOK, color);
     while (rooks) {
         Square sq = poplsb(rooks);
-        mobility += popcount(RookAttacks(sq, board.occAll) & ~board.Us(color));
+        U64 attacks = RookAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 5;                             // Weight: 5
+        mobility += popcount(attacks & board.Enemy(color)) * 2;        // Bonus for attacking enemy pieces
     }
 
     // Queens
     Bitboard queens = board.pieces(QUEEN, color);
     while (queens) {
         Square sq = poplsb(queens);
-        mobility += popcount(QueenAttacks(sq, board.occAll) & ~board.Us(color));
+        U64 attacks = QueenAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 9;                              // Weight: 9
+        mobility += popcount(attacks & board.Enemy(color)) * 2;         // Bonus for attacking enemy pieces
     }
 
     // King
     Bitboard king = board.pieces(KING, color);
     if (king) {
         Square sq = poplsb(king);
-        mobility += popcount(KingAttacks(sq) & ~board.Us(color));
+        U64 attacks = KingAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 2;               // Weight: 2
+
+        // Penalize unsafe king moves (attacks on squares controlled by the enemy)
+        mobility -= popcount(attacks & board.Enemy(color)) * 3;
     }
 
-    return mobility;
+    // Penalize blocked pieces (pieces with very low mobility)
+    if (mobility < 5) {
+        mobility -= 5; // Apply a penalty for very low mobility
+    }
+
+    // Scale mobility by game phase
+    float endgameWeight = getGamePhase(board); // 0.0 in opening, 1.0 in endgame
+    float middlegameWeight = 1.0f - endgameWeight;
+
+    return static_cast<int>(mobility * middlegameWeight);
 }
