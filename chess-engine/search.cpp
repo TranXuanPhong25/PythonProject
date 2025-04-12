@@ -411,63 +411,69 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 {
     Move bestMove = NO_MOVE;
-    int prevScore = 0;  // Previous iteration score
-    
-    // Use full-width window for first depth
+    int prevScore = 0;
+
+    // Variables for aspiration window
+    int failCount = 0;
+    const int MAX_FAILS = 3;  // Maximum window adjustments before going full-width
+
+    // Iterative deepening loop
     for (int depth = 1; depth <= maxDepth; depth++)
     {
-        // For shallow depths, use full window
+        int score;
+        Move currentBestMove;
+
+        // For very shallow depths, use full window
         if (depth <= 2) {
-            Move currentBestMove = getBestMoveIterative(board, depth, table, -INF_BOUND, INF_BOUND);
+            currentBestMove = getBestMoveIterative(board, depth, table, -INF_BOUND, INF_BOUND);
             if (currentBestMove != NO_MOVE) {
                 bestMove = currentBestMove;
+                bool ttHit;
+                TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
+                if (ttHit) prevScore = entry.score;
             }
-            bool ttHit;
-            // Get the score from TT for use in next iteration
-            TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
-            prevScore = entry.score;
             continue;
         }
-        
-        // For deeper depths, use aspiration window
-        int alpha = prevScore - 32;  // Start with narrow window
-        int beta = prevScore + 32;
-        int score;
-        
-        // Try with increasingly wider windows until success
-        while (true) {
-            Move currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
-            
-            if (score <= alpha) {
-                // Failed low - widen the window below
-                alpha = std::max(-INF_BOUND, alpha - 64);
-                beta = prevScore + 16;  // Keep narrower upper bound
+
+        // Aspiration window - size depends on depth and previous stability
+        int windowSize = 16 + (8 * failCount) + (4 * depth);
+        int alpha = prevScore - windowSize;
+        int beta = prevScore + windowSize;
+
+        // Search with aspiration window
+        currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
+
+        // Check if we need to research with wider window
+        if (score <= alpha || score >= beta) {
+            // Increment fail counter 
+            failCount++;
+
+            // Too many fails, use full window
+            if (failCount >= MAX_FAILS) {
+                currentBestMove = getBestMoveIterativeWithScore(
+                    board, depth, table, -INF_BOUND, INF_BOUND, &score);
+                failCount = 0;  // Reset for next depth
             }
-            else if (score >= beta) {
-                // Failed high - widen the window above
-                beta = std::min(static_cast<int>(INF_BOUND), beta + 64); 
-                alpha = prevScore - 16;  // Keep narrower lower bound
-            }
+            // Only one research with wider window
             else {
-                // Score within window - success
-                if (currentBestMove != NO_MOVE) {
-                    bestMove = currentBestMove;
-                }
-                break;
-            }
-            
-            // If window is already full width, break to avoid infinite loop
-            if (alpha <= -INF_BOUND + 100 && beta >= INF_BOUND - 100) {
-                if (currentBestMove != NO_MOVE) {
-                    bestMove = currentBestMove;
-                }
-                break;
+                // Just use a full window for simplicity after first fail
+                currentBestMove = getBestMoveIterativeWithScore(
+                    board, depth, table, -INF_BOUND, INF_BOUND, &score);
             }
         }
-        
-        // Save this depth's score for next iteration
+        else {
+            // Window was good - reduce fail counter for next depth
+            failCount = std::max(0, failCount - 1);
+        }
+
+        // Update best move if we found one
+        if (currentBestMove != NO_MOVE) {
+            bestMove = currentBestMove;
+        }
+
+        // Update for next iteration
         prevScore = score;
     }
-    
+
     return bestMove;
 }
