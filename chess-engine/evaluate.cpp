@@ -33,7 +33,7 @@ int evaluate(const Board &board)
    int score = 0;
    float endgameWeight = getGamePhase(board);
 
-   
+      
    // Material counting using bitboards for efficiency
    for (PieceType pt = PAWN; pt <= KING; ++pt)
    {

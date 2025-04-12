@@ -380,6 +380,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Store position in TT
    table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board));
 
+
    return bestScore;
 }
 
@@ -542,8 +543,8 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
             beta = beta + windowSize * 3; // More aggressive widening
          }
 
-         // Triple window size for next attempt
-         windowSize *= 3;
+         // Triple window size for next attempt - THIS IS THE PROBLEM
+         windowSize += 25;  // Linear growth to prevent exponential growth
       }
 
       // Save this depth's score for next iteration
