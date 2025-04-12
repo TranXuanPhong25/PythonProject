@@ -33,76 +33,45 @@ int evaluate(const Board &board)
    int score = 0;
    float endgameWeight = getGamePhase(board);
 
-      
+   
    // Material counting using bitboards for efficiency
    for (PieceType pt = PAWN; pt <= KING; ++pt)
    {
-       Bitboard whitePieces = board.pieces(pt, White);
-       Bitboard blackPieces = board.pieces(pt, Black);
+      Bitboard whitePieces = board.pieces(pt, White);
+      Bitboard blackPieces = board.pieces(pt, Black);
 
-       // WHITE
-       while (whitePieces)
-       {
-           Square sq = static_cast<Square>(pop_lsb(whitePieces));
-           score += PIECE_VALUES[pt];
+      // Process white pieces
+      while (whitePieces)
+      {
+         Square sq = static_cast<Square>(pop_lsb(whitePieces)); // Get and remove the least significant bit
+         score += PIECE_VALUES[pt];        // Add material value
+         if (pt == KING)
+         {
+            // Interpolate between middlegame and endgame king tables
+            score += KING_MG_PST[sq] * (1.0f - endgameWeight) + KING_EG_PST[sq] * endgameWeight;
+         }
+         else
+         {
+            score += PAWN_PST[sq]; // Add piece-square table bonus
+         }
+      }
 
-           int idx = squareToIndex(sq);
-
-           switch (pt)
-           {
-           case PAWN:
-               score += PAWN_PST[idx];
-               break;
-           case KNIGHT:
-               score += KNIGHT_PST[idx];
-               break;
-           case BISHOP:
-               score += BISHOP_PST[idx];
-               break;
-           case ROOK:
-               score += ROOK_PST[idx];
-               break;
-           case QUEEN:
-               score += QUEEN_PST[idx];
-               break;
-           case KING:
-               score += KING_MG_PST[idx] * (1.0f - endgameWeight) +
-                        KING_EG_PST[idx] * endgameWeight;
-               break;
-           }
-       }
-
-       // BLACK
-       while (blackPieces)
-       {
-           Square sq = static_cast<Square>(pop_lsb(blackPieces));
-           score -= PIECE_VALUES[pt];
-
-           int flippedIdx = getFlippedSquare(sq);
-
-           switch (pt)
-           {
-           case PAWN:
-               score -= PAWN_PST[flippedIdx];
-               break;
-           case KNIGHT:
-               score -= KNIGHT_PST[flippedIdx];
-               break;
-           case BISHOP:
-               score -= BISHOP_PST[flippedIdx];
-               break;
-           case ROOK:
-               score -= ROOK_PST[flippedIdx];
-               break;
-           case QUEEN:
-               score -= QUEEN_PST[flippedIdx];
-               break;
-           case KING:
-               score -= KING_MG_PST[flippedIdx] * (1.0f - endgameWeight) +
-                        KING_EG_PST[flippedIdx] * endgameWeight;
-               break;
-           }
-       }
+      // Process black pieces
+      while (blackPieces)
+      {
+         Square sq = static_cast<Square>(pop_lsb(blackPieces)); // Get and remove the least significant bit
+         score -= PIECE_VALUES[pt];        // Subtract material value
+         if (pt == KING)
+         {
+            // Interpolate between middlegame and endgame king tables
+            score -= KING_MG_PST[getFlippedSquare(sq)] * (1.0f - endgameWeight) +
+                     KING_EG_PST[getFlippedSquare(sq)] * endgameWeight;
+         }
+         else
+         {
+            score -= PAWN_PST[getFlippedSquare(sq)]; // Subtract piece-square table bonus
+         }
+      }
    }
 
    // Bishop pair bonus
