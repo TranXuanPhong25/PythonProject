@@ -75,32 +75,60 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    Move bestMove = NO_MOVE;
    uint8_t nodeFlag = HFALPHA;
 
-   for (int i = 0; i < moves.size; i++)
-   {
+   for (int i = 0; i < moves.size; i++) {
       Move move = moves[i].move;
+  
+      // Transposition Table Move
+      bool isTTMove = (move == ttMove);
+  
+      // Thực hiện nước đi
       board.makeMove(move);
-      // Negamax recursively calls with inverted bounds
-      int score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
-      board.unmakeMove(move);
-
-      if (score > bestScore)
-      {
-         bestScore = score;
-         bestMove = move;
-
-         if (score > alpha)
-         {
-            nodeFlag = HFEXACT;
-            alpha = score;
-
-            if (alpha >= beta)
-            {
-               nodeFlag = HFBETA;
-               break; // Beta cutoff
-            }
-         }
+  
+      int score;
+  
+      // Apply LMR (Late Move Reduction) for certain conditions:
+      // Depth >= 3
+      // Move from the 3rd move onwards (i >= 3)
+      // Not a attacking move (not causing an immediate check)
+      // Not a TT move (not the best move from the TT)
+      // Not a checkmate or stalemate position
+      if (depth >= 3 && i >= 3 &&
+          board.pieceAtB(to(move)) == None &&
+          !board.isSquareAttacked(~board.sideToMove, board.KingSQ(~board.sideToMove)) &&
+          !isTTMove) {
+          
+          // decrease depth by 2 for LMR
+          score = -negamax(board, depth - 2, -alpha - 1, -alpha, table, ply + 1);
+  
+          // If the score is greater than alpha, do a full search
+          if (score > alpha) {
+              score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
+          }
+      } else {
+          // Regular search
+          score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       }
-   }
+  
+      board.unmakeMove(move);
+  
+      // Update alpha and beta bounds <bestMove>
+      if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+  
+          if (score > alpha) {
+              nodeFlag = HFEXACT;
+              alpha = score;
+  
+              if (alpha >= beta) {
+                  nodeFlag = HFBETA;
+                  break; // Beta cutoff
+              }
+          }
+      }
+  }
+  
+   
 
    // Store position in TT
    table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board), ply, nodeFlag == HFEXACT);
