@@ -123,6 +123,9 @@ int evaluate(const Board &board)
    //Evaluate center control
    score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
 
+   //Evaluate mobility
+   score += (board.sideToMove == White ? evaluateMobility(board, White) : -evaluateMobility(board, Black));
+
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
 }
