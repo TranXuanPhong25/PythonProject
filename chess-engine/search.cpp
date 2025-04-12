@@ -131,6 +131,14 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    if (depth <= 0)
       return quiescence(board, alpha, beta, table, ply);
 
+   if (board.isRepetition())
+   {
+      return 0;
+   }
+   if (ply >= MAX_PLY - 1)
+   {
+      return evaluate(board);
+   }
    // TT lookup remains the same
    U64 posKey = board.hashKey;
    table->prefetch_tt(posKey);
@@ -174,38 +182,47 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          return beta;
    }
 
-   // Null move pruning remains the same
+   // Null move pruning with safety limits
    if (!inCheck && !is_pvnode && !isRoot)
    {
       if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
       {
-         // Dynamic null move R based on depth and advantage
-         int R = 3 + depth / 4 + std::min(3, (staticEval - beta) / 200);
-
-         // Skip null move in suspected zugzwang positions
-         bool skipNullMove = getPieceCounts(board,board.sideToMove) <= 3 &&
-                             board.pieces(PAWN, board.sideToMove) == 0;
-
-         if (!skipNullMove)
+         // Add stack depth check to prevent excessive recursion
+         if (ply < MAX_PLY - 10) // Reserve some stack space
          {
-            board.makeNullMove();
-            int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
-            board.unmakeNullMove();
+            // Cap the dynamic reduction to prevent excessive depth skipping
+            int R = 3 + depth / 4 + std::min(2, (staticEval - beta) / 200);
+            R = std::min(R, 6); // Hard cap on reduction
 
-            // Consider verification search for positions close to zugzwang
-            if (nullScore >= beta)
+            // Strengthen zugzwang detection criteria
+            bool skipNullMove = getPieceCounts(board, board.sideToMove) <= 3 ||
+                                (board.pieces(PAWN, board.sideToMove) == 0 &&
+                                 getPieceCounts(board, board.sideToMove) <= 5);
+
+            if (!skipNullMove)
             {
-               // Optional verification for suspected zugzwang
-               if (getPieceCounts(board,board.sideToMove) <= 4 && R >= 4)
+               board.makeNullMove();
+
+               // Use a reduced-depth search with tighter bounds
+               int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
+               board.unmakeNullMove();
+
+               if (nullScore >= beta)
                {
-                  // Verification search with reduced depth
-                  int verificationScore = negamax(board, depth - 3, beta - 1, beta, table, ply);
-                  if (verificationScore >= beta)
-                     return beta;
-               }
-               else
-               {
-                  return nullScore;
+                  // Only do verification search in specific endgame positions
+                  // where zugzwang is more likely
+                  if (getPieceCounts(board, board.sideToMove) <= 4 && R >= 4 && depth >= 5)
+                  {
+                     // Use a more modest depth for verification
+                     int verificationDepth = std::min(depth - 3, 5);
+                     int verificationScore = negamax(board, verificationDepth, beta - 1, beta, table, ply);
+                     if (verificationScore >= beta)
+                        return beta;
+                  }
+                  else
+                  {
+                     return nullScore;
+                  }
                }
             }
          }
@@ -221,7 +238,8 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // Static Null Move Pruning
-   if (!is_pvnode && !inCheck && depth <= 5) {
+   if (!is_pvnode && !inCheck && depth <= 5)
+   {
       int margin = depth <= 3 ? 90 * depth : 300 + 50 * (depth - 3);
       if (staticEval - margin >= beta)
          return beta;
@@ -450,78 +468,87 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 {
-    Move bestMove = NO_MOVE;
-    int prevScore = 0;  // Previous iteration score
-    
-    // Use full-width window for first three depths
-    for (int depth = 1; depth <= maxDepth; depth++)
-    {
-        int score;
-        Move currentBestMove;
-        
-        // For shallow depths or early game positions, use full window
-        if (depth <= 3) {
+   Move bestMove = NO_MOVE;
+   int prevScore = 0; // Previous iteration score
+
+   // Use full-width window for first three depths
+   for (int depth = 1; depth <= maxDepth; depth++)
+   {
+      int score;
+      Move currentBestMove;
+
+      // For shallow depths or early game positions, use full window
+      if (depth <= 3)
+      {
+         currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
+         if (currentBestMove != NO_MOVE)
+         {
+            bestMove = currentBestMove;
+         }
+         prevScore = score;
+         continue;
+      }
+
+      // For deeper depths, use aspiration window
+      // Fixed window size to start - smaller in opening positions
+      int windowSize = 25; // Smaller initial window
+      int alpha = prevScore - windowSize;
+      int beta = prevScore + windowSize;
+
+      // Try with increasingly wider windows until success
+      int failCount = 0;
+      while (true)
+      {
+         // Ensure our bounds are within limits
+         alpha = std::max(-INF_BOUND, alpha);
+         beta = std::min(static_cast<int>(INF_BOUND), beta);
+
+         currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
+
+         // Store any valid move we find
+         if (currentBestMove != NO_MOVE)
+         {
+            bestMove = currentBestMove;
+         }
+
+         // Search successful - move to next depth
+         if (score > alpha && score < beta)
+         {
+            break;
+         }
+
+         failCount++;
+
+         // After just 2 fails with opening positions, use full window
+         if (failCount >= 2)
+         {
             currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
-            if (currentBestMove != NO_MOVE) {
-                bestMove = currentBestMove;
+            if (currentBestMove != NO_MOVE)
+            {
+               bestMove = currentBestMove;
             }
-            prevScore = score;
-            continue;
-        }
-        
-        // For deeper depths, use aspiration window
-        // Fixed window size to start - smaller in opening positions
-        int windowSize = 25;  // Smaller initial window
-        int alpha = prevScore - windowSize;
-        int beta = prevScore + windowSize;
-        
-        // Try with increasingly wider windows until success
-        int failCount = 0;
-        while (true) {
-            // Ensure our bounds are within limits
-            alpha = std::max(-INF_BOUND, alpha);
-            beta = std::min(static_cast<int>(INF_BOUND), beta);
-            
-            currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
-            
-            // Store any valid move we find
-            if (currentBestMove != NO_MOVE) {
-                bestMove = currentBestMove;
-            }
-            
-            // Search successful - move to next depth
-            if (score > alpha && score < beta) {
-                break;
-            }
-            
-            failCount++;
-            
-            // After just 2 fails with opening positions, use full window
-            if (failCount >= 2) {
-                currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
-                if (currentBestMove != NO_MOVE) {
-                    bestMove = currentBestMove;
-                }
-                break;
-            }
-            
-            // Adjust window based on failure type
-            if (score <= alpha) {
-                // Failed low - widen below
-                alpha = alpha - windowSize * 3;  // More aggressive widening
-            }
-            else { // score >= beta
-                // Failed high - widen above
-                beta = beta + windowSize * 3;  // More aggressive widening
-            }
-            
-            // Triple window size for next attempt
-            windowSize *= 3;
-        }
-        
-        // Save this depth's score for next iteration
-        prevScore = score;
-    }
-    
-    return bestMove;
+            break;
+         }
+
+         // Adjust window based on failure type
+         if (score <= alpha)
+         {
+            // Failed low - widen below
+            alpha = alpha - windowSize * 3; // More aggressive widening
+         }
+         else
+         { // score >= beta
+            // Failed high - widen above
+            beta = beta + windowSize * 3; // More aggressive widening
+         }
+
+         // Triple window size for next attempt
+         windowSize *= 3;
+      }
+
+      // Save this depth's score for next iteration
+      prevScore = score;
+   }
+
+   return bestMove;
 }
