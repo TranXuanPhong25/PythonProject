@@ -95,7 +95,7 @@ int evaluate(const Board &board)
                score -= ROOK_PST[flippedIdx];
                break;
            case QUEEN:
-               score -= QUEEN_PST[flippedIdx];
+               score -= QUEEN_PST[flippedIdx]; 
                break;
            case KING:
                score -= KING_MG_PST[flippedIdx] * (1.0f - endgameWeight) +
