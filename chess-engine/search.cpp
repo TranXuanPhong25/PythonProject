@@ -336,7 +336,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
       if (futilityPruning && i > 0 && !isCapture && !isPromotion)
          continue; // Skip this quiet move
-
+if (!is_pvnode && !inCheck && depth <= 4 && i >= depth * 5 + 3 && !isCapture && !isPromotion) {
+        if (movesSearched > 0)  // Don't apply to first move
+            continue;
+    }
       // Update mobility incrementally
       updateMobility(board, move, mobilityScore, board.sideToMove);
 
