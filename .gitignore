@@ -5,3 +5,4 @@
 chess-engine/bin/
 chess-engine/build/
 .idea/
+.env
