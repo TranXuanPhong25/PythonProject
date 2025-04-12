@@ -185,44 +185,51 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // Null move pruning with safety limits
-   if (!inCheck && !is_pvnode && !isRoot)
-   {
-      if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
-      {
-         // Add stack depth check to prevent excessive recursion
-         if (ply < MAX_PLY - 10) // Reserve some stack space
-         {
-            // Cap the dynamic reduction to prevent excessive depth skipping
-            int R = 3;
-
-            // Strengthen zugzwang detection criteria
-            bool skipNullMove = getPieceCounts(board, board.sideToMove) <= 3 ||
-                                (board.pieces(PAWN, board.sideToMove) == 0 &&
-                                 getPieceCounts(board, board.sideToMove) <= 5);
-
-            if (!skipNullMove)
-            {
+   if (!inCheck && !is_pvnode && !isRoot) {
+      if (board.nonPawnMat(board.sideToMove) && depth >= 3 && 
+         (!ttHit || entry.flag != HFALPHA || eval >= beta)) {
+        
+         if (ply < MAX_PLY - 10) {
+            // Dynamic R based on depth and advantage
+            int R = 3;  // Base reduction
+            
+            // Adjust R based on position evaluation
+            bool hasAdvantage = eval >= beta + 80;
+            if (hasAdvantage) R++;
+            if (depth >= 8) R++;
+            
+            // More conservative for endgames
+            if (getPieceCounts(board, White) + getPieceCounts(board, Black) <= 12)
+               R = std::max(2, R - 1);
+                
+            // Adaptive zugzwang detection
+            bool pawnless = board.pieces(PAWN, board.sideToMove) == 0;
+            bool fewPieces = getPieceCounts(board, board.sideToMove) <= 3;
+            bool likelyZugzwang = fewPieces || (pawnless && getPieceCounts(board, board.sideToMove) <= 5);
+            
+            if (!likelyZugzwang) {
                board.makeNullMove();
-
-               // Use a reduced-depth search with tighter bounds
+                
+               // Use reduced-depth search with tighter bounds
                int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
                board.unmakeNullMove();
-
-               if (nullScore >= beta)
-               {
-                  // Only do verification search in specific endgame positions
-                  // where zugzwang is more likely
-                  if (getPieceCounts(board, board.sideToMove) <= 4 && R >= 4 && depth >= 5)
-                  {
-                     // Use a more modest depth for verification
-                     int verificationDepth = std::min(depth - 3, 5);
+                
+               if (nullScore >= beta) {
+                  // Dynamic verification threshold
+                  bool deepSearch = depth >= 6;
+                  bool endgamePosition = getPieceCounts(board, board.sideToMove) <= 4;
+                  bool needsVerification = endgamePosition && deepSearch;
+                    
+                  if (needsVerification) {
+                     // Adaptive verification depth
+                     int verificationDepth = depth / 2;
+                     verificationDepth = std::min(verificationDepth, 5);
+                        
                      int verificationScore = negamax(board, verificationDepth, beta - 1, beta, table, ply);
                      if (verificationScore >= beta)
                         return beta;
-                  }
-                  else
-                  {
-                     return nullScore;
+                  } else {
+                     return beta;  // Safe to return without verification
                   }
                }
             }
