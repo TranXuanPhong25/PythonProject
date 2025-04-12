@@ -3,7 +3,33 @@
 #include "evaluate_features.hpp"
 
 #include <algorithm>
-
+// Add this function to calculate LMR reduction dynamically
+int calculateReduction(Board&board,int depth, int moveIndex, bool isPV, Move move, int ply) {
+   // Base reduction
+   int R = 1;
+   
+   // Depth and move count adjustments
+   R += (depth >= 6) ? 1 : 0;
+   R += (moveIndex >= 6) ? 1 : 0;
+   R += (moveIndex >= 12) ? 1 : 0;
+   
+   // PV node adjustment
+   R -= isPV ? 1 : 0;
+   
+   // History-based adjustment
+   int side = board.sideToMove == White ? 0 : 1;
+   int history_score = historyTable[side][from(move)][to(move)];
+   
+   if (history_score > 5000) R--;
+   if (history_score < 1000 && moveIndex > 8) R++;
+   
+   // Killer move adjustment
+   if (move == killerMoves[ply][0] || move == killerMoves[ply][1])
+       R = std::max(0, R - 1);
+   
+   // Safety clamp
+   return std::min(depth - 2, std::max(0, R));
+}
 int getPieceCounts(const Board &board, Color color)
 {
    int count = 0;
@@ -328,18 +354,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       {
          // More aggressive reduction formula - vary based on depth and move index
          // Higher numbers = more pruning = faster search
-         int R = 1;
+         int R = calculateReduction(board, depth, i, is_pvnode, move, ply);
 
-         if (i > 4) // More reduction for later moves
-            R++;
-
-         if (depth > 5) // More reduction for deeper searches
-            R++;
-
-         // Don't reduce too much for killer moves (likely good tactical moves)
-         if (move == killerMoves[ply][0] || move == killerMoves[ply][1])
-            R = std::max(0, R - 1);
-
+        
          // Do reduced search with null window
          score = -negamax(board, depth - 1 - R, -alpha - 1, -alpha, table, ply + 1);
 
