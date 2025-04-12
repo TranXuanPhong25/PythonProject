@@ -300,8 +300,8 @@ int evaluateMobility(const Board &board, Color color) {
     while (knights) {
         Square sq = poplsb(knights);
         U64 attacks = KnightAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
-        mobility += popcount(attacks) * 3;                 // Weight: 3
-        mobility += popcount(attacks & board.Enemy(color)) * 2; // Bonus for attacking enemy pieces
+        mobility += popcount(attacks) * 3.5;                 // Weight: 3
+        mobility += popcount(attacks & board.Enemy(color)) * 2.9; // Bonus for attacking enemy pieces
     }
 
     // Bishops
@@ -309,8 +309,8 @@ int evaluateMobility(const Board &board, Color color) {
     while (bishops) {
         Square sq = poplsb(bishops);
         U64 attacks = BishopAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
-        mobility += popcount(attacks) * 3;                               // Weight: 3
-        mobility += popcount(attacks & board.Enemy(color)) * 2;          // Bonus for attacking enemy pieces
+        mobility += popcount(attacks) * 3.5;                               // Weight: 3
+        mobility += popcount(attacks & board.Enemy(color)) * 2.4;          // Bonus for attacking enemy pieces
     }
 
     // Rooks
@@ -318,8 +318,8 @@ int evaluateMobility(const Board &board, Color color) {
     while (rooks) {
         Square sq = poplsb(rooks);
         U64 attacks = RookAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
-        mobility += popcount(attacks) * 5;                             // Weight: 5
-        mobility += popcount(attacks & board.Enemy(color)) * 2;        // Bonus for attacking enemy pieces
+        mobility += popcount(attacks) * 5.5;                             // Weight: 5
+        mobility += popcount(attacks & board.Enemy(color)) * 2,6;        // Bonus for attacking enemy pieces
     }
 
     // Queens
@@ -327,8 +327,8 @@ int evaluateMobility(const Board &board, Color color) {
     while (queens) {
         Square sq = poplsb(queens);
         U64 attacks = QueenAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
-        mobility += popcount(attacks) * 9;                              // Weight: 9
-        mobility += popcount(attacks & board.Enemy(color)) * 2;         // Bonus for attacking enemy pieces
+        mobility += popcount(attacks) * 9.2;                              // Weight: 9
+        mobility += popcount(attacks & board.Enemy(color)) * 2.7;         // Bonus for attacking enemy pieces
     }
 
     // King
@@ -339,7 +339,7 @@ int evaluateMobility(const Board &board, Color color) {
         mobility += popcount(attacks) * 2;               // Weight: 2
  
         // Penalize unsafe king moves (attacks on squares controlled by the enemy)
-        mobility -= popcount(attacks & board.Enemy(color)) * 3;
+        mobility -= popcount(attacks & board.Enemy(color)) * 3.3;
     }
 
     // Penalize blocked pieces (pieces with very low mobility)
