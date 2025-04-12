@@ -191,8 +191,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          if (ply < MAX_PLY - 10) // Reserve some stack space
          {
             // Cap the dynamic reduction to prevent excessive depth skipping
-            int R = 3 + depth / 4 + std::min(2, (staticEval - beta) / 200);
-            R = std::min(R, 6); // Hard cap on reduction
+            int R = 3;
 
             // Strengthen zugzwang detection criteria
             bool skipNullMove = getPieceCounts(board, board.sideToMove) <= 3 ||
