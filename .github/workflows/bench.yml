@@ -18,5 +18,3 @@ jobs:
       run: test -f chess-engine/Makefile
     - name: Run Make bench
       run: make -C chess-engine bench
-    - name: run bench
-      run: ./chess-engine/bench
