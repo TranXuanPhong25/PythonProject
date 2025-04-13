@@ -1,68 +1,174 @@
 #include "search.hpp"
+#include <chrono> // Add for timing measurements
 
 SearchStats searchStats;
+
+// Profiling structure to track time spent in different parts of search
+struct ProfilerData
+{
+   // Timers for different search components
+   std::chrono::nanoseconds ttLookupTime{0};
+   std::chrono::nanoseconds moveGenTime{0};
+   std::chrono::nanoseconds evaluationTime{0};
+   std::chrono::nanoseconds seeTime{0};
+   std::chrono::nanoseconds moveMakingTime{0};
+   std::chrono::nanoseconds moveOrderingTime{0};
+   std::chrono::nanoseconds pruningTime{0};
+   std::chrono::nanoseconds quiescenceTime{0};
+
+   // Counters
+   size_t ttLookups{0};
+   size_t ttHits{0};
+   size_t moveGens{0};
+   size_t evaluations{0};
+   size_t seeChecks{0};
+   size_t movesGenerated{0};
+   size_t movesMade{0};
+   size_t pruningAttempts{0};
+   size_t pruningSuccesses{0};
+
+   void reset()
+   {
+      ttLookupTime = std::chrono::nanoseconds{0};
+      moveGenTime = std::chrono::nanoseconds{0};
+      evaluationTime = std::chrono::nanoseconds{0};
+      seeTime = std::chrono::nanoseconds{0};
+      moveMakingTime = std::chrono::nanoseconds{0};
+      moveOrderingTime = std::chrono::nanoseconds{0};
+      pruningTime = std::chrono::nanoseconds{0};
+      quiescenceTime = std::chrono::nanoseconds{0};
+
+      ttLookups = 0;
+      ttHits = 0;
+      moveGens = 0;
+      evaluations = 0;
+      seeChecks = 0;
+      movesGenerated = 0;
+      movesMade = 0;
+      pruningAttempts = 0;
+      pruningSuccesses = 0;
+   }
+
+   void printProfileReport() const
+   {
+      auto totalSearchTime = ttLookupTime + moveGenTime + evaluationTime +
+                             seeTime + moveMakingTime + moveOrderingTime +
+                             pruningTime + quiescenceTime;
+
+      std::cout << "\n===== SEARCH PROFILING REPORT =====\n";
+      std::cout << "Total profiled time: " << std::chrono::duration_cast<std::chrono::milliseconds>(totalSearchTime).count() << " ms\n\n";
+
+      // Print timing information
+      std::cout << "TIME BREAKDOWN:\n";
+      std::cout << "TT Lookup:      " << std::chrono::duration_cast<std::chrono::milliseconds>(ttLookupTime).count()
+                << " ms (" << (ttLookupTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "Move Generation: " << std::chrono::duration_cast<std::chrono::milliseconds>(moveGenTime).count()
+                << " ms (" << (moveGenTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "Evaluation:      " << std::chrono::duration_cast<std::chrono::milliseconds>(evaluationTime).count()
+                << " ms (" << (evaluationTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "SEE Checks:      " << std::chrono::duration_cast<std::chrono::milliseconds>(seeTime).count()
+                << " ms (" << (seeTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "Move Making:     " << std::chrono::duration_cast<std::chrono::milliseconds>(moveMakingTime).count()
+                << " ms (" << (moveMakingTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "Move Ordering:   " << std::chrono::duration_cast<std::chrono::milliseconds>(moveOrderingTime).count()
+                << " ms (" << (moveOrderingTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "Pruning:         " << std::chrono::duration_cast<std::chrono::milliseconds>(pruningTime).count()
+                << " ms (" << (pruningTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+      std::cout << "Quiescence:      " << std::chrono::duration_cast<std::chrono::milliseconds>(quiescenceTime).count()
+                << " ms (" << (quiescenceTime.count() * 100.0 / totalSearchTime.count()) << "%)\n";
+
+      // Print counter information
+      std::cout << "\nCOUNTERS:\n";
+      std::cout << "TT Lookups:      " << ttLookups << " (Hit rate: " << (ttHits * 100.0 / ttLookups) << "%)\n";
+      std::cout << "Move Generations: " << moveGens << " (Avg moves: " << (movesGenerated * 1.0 / moveGens) << ")\n";
+      std::cout << "Evaluations:      " << evaluations << "\n";
+      std::cout << "SEE Checks:       " << seeChecks << "\n";
+      std::cout << "Moves Made:       " << movesMade << "\n";
+      std::cout << "Pruning Attempts: " << pruningAttempts << " (Success rate: "
+                << (pruningSuccesses * 100.0 / pruningAttempts) << "%)\n";
+
+      // Print efficiency metrics
+      std::cout << "\nEFFICIENCY METRICS:\n";
+      std::cout << "Time per evaluation: " << (evaluations ? evaluationTime.count() / evaluations : 0) << " ns\n";
+      std::cout << "Time per move made:  " << (movesMade ? moveMakingTime.count() / movesMade : 0) << " ns\n";
+      std::cout << "Time per TT lookup:  " << (ttLookups ? ttLookupTime.count() / ttLookups : 0) << " ns\n";
+      std::cout << "Time per SEE check:  " << (seeChecks ? seeTime.count() / seeChecks : 0) << " ns\n";
+      std::cout << "==============================\n";
+   }
+};
+
+// Global profiling data
+ProfilerData profiler;
 
 // Global move history stack
 MoveHistoryEntry moveHistory[MAX_MOVE_HISTORY];
 int moveHistoryCount = 0;
 
 // Add a move to the move history stack
-void addMoveToHistory(Move move, U64 hashKey) {
-    if (moveHistoryCount < MAX_MOVE_HISTORY) {
-        moveHistory[moveHistoryCount++] = MoveHistoryEntry(move, hashKey);
-    }
-    else {
-        // If history is full, shift everything down and add at the end
-        for (int i = 0; i < MAX_MOVE_HISTORY - 1; i++) {
-            moveHistory[i] = moveHistory[i + 1];
-        }
-        moveHistory[MAX_MOVE_HISTORY - 1] = MoveHistoryEntry(move, hashKey);
-    }
+void addMoveToHistory(Move move, U64 hashKey)
+{
+   if (moveHistoryCount < MAX_MOVE_HISTORY)
+   {
+      moveHistory[moveHistoryCount++] = MoveHistoryEntry(move, hashKey);
+   }
+   else
+   {
+      // If history is full, shift everything down and add at the end
+      for (int i = 0; i < MAX_MOVE_HISTORY - 1; i++)
+      {
+         moveHistory[i] = moveHistory[i + 1];
+      }
+      moveHistory[MAX_MOVE_HISTORY - 1] = MoveHistoryEntry(move, hashKey);
+   }
 }
 
 // Get the last move from history
-Move getLastMove() {
-    if (moveHistoryCount > 0) {
-        return moveHistory[moveHistoryCount - 1].move;
-    }
-    return NO_MOVE;
+Move getLastMove()
+{
+   if (moveHistoryCount > 0)
+   {
+      return moveHistory[moveHistoryCount - 1].move;
+   }
+   return NO_MOVE;
 }
 
 // Clear the move history
-void clearMoveHistory() {
-    moveHistoryCount = 0;
+void clearMoveHistory()
+{
+   moveHistoryCount = 0;
 }
 
 // Update continuation history for a move that was effective after another move
-void updateContinuationHistory(Board &board, Move prevMove, Move currMove, int depth, bool isCutoff) {
-    if (prevMove == NO_MOVE || currMove == NO_MOVE) 
-        return;
-    
-    // Get pieces and squares for both moves
-    Piece prevPiece = board.pieceAtB(to(prevMove));
-    int prevTo = to(prevMove);
-    
-    Piece currPiece = board.pieceAtB(from(currMove));
-    int currTo = to(currMove);
-    
-    // Skip if any information is invalid
-    if (prevPiece == None || currPiece == None)
-        return;
-    
-    // Update continuation history with bonus or penalty
-    int bonus = std::min(32 * depth * depth, 1024);
-    if (!isCutoff)
-        bonus = -bonus;
-    
-    // Apply the same decay/bonus formula used in regular history
-    continuationHistory[prevPiece][prevTo][currPiece][currTo] = 
-        continuationHistory[prevPiece][prevTo][currPiece][currTo] * 32 / 33 + bonus;
-    
-    // Clamp values to prevent overflow
-    if (continuationHistory[prevPiece][prevTo][currPiece][currTo] > 20000)
-        continuationHistory[prevPiece][prevTo][currPiece][currTo] = 20000;
-    if (continuationHistory[prevPiece][prevTo][currPiece][currTo] < -20000)
-        continuationHistory[prevPiece][prevTo][currPiece][currTo] = -20000;
+void updateContinuationHistory(Board &board, Move prevMove, Move currMove, int depth, bool isCutoff)
+{
+   if (prevMove == NO_MOVE || currMove == NO_MOVE)
+      return;
+
+   // Get pieces and squares for both moves
+   Piece prevPiece = board.pieceAtB(to(prevMove));
+   int prevTo = to(prevMove);
+
+   Piece currPiece = board.pieceAtB(from(currMove));
+   int currTo = to(currMove);
+
+   // Skip if any information is invalid
+   if (prevPiece == None || currPiece == None)
+      return;
+
+   // Update continuation history with bonus or penalty
+   int bonus = std::min(32 * depth * depth, 1024);
+   if (!isCutoff)
+      bonus = -bonus;
+
+   // Apply the same decay/bonus formula used in regular history
+   continuationHistory[prevPiece][prevTo][currPiece][currTo] =
+       continuationHistory[prevPiece][prevTo][currPiece][currTo] * 32 / 33 + bonus;
+
+   // Clamp values to prevent overflow
+   if (continuationHistory[prevPiece][prevTo][currPiece][currTo] > 20000)
+      continuationHistory[prevPiece][prevTo][currPiece][currTo] = 20000;
+   if (continuationHistory[prevPiece][prevTo][currPiece][currTo] < -20000)
+      continuationHistory[prevPiece][prevTo][currPiece][currTo] = -20000;
 }
 
 int getPieceCounts(const Board &board, Color color)
@@ -107,23 +213,47 @@ int score_from_tt(int score, int ply)
 
    return score;
 }
-int deltaPruningMargin(Board &board) {
+int deltaPruningMargin(Board &board)
+{
    // Base margin
    int margin = 200;
-   
+
    // Adjust for game phase
    float phase = getGamePhase(board);
    margin += int(50 * (1.0f - phase)); // Larger margin in endgames
-   
+
    // Adjust for king safety - larger margin when king is less safe
    int kingDanger = evaluateKingSafety(board, board.sideToMove);
    if (kingDanger > 0)
-       margin += std::min(kingDanger / 5, 100);
-   
+      margin += std::min(kingDanger / 5, 100);
+
    return margin;
 }
+
+// Timer utility class for profiling sections
+class ScopedTimer
+{
+private:
+   std::chrono::time_point<std::chrono::high_resolution_clock> start;
+   std::chrono::nanoseconds &target;
+
+public:
+   explicit ScopedTimer(std::chrono::nanoseconds &targetTime)
+       : start(std::chrono::high_resolution_clock::now()), target(targetTime) {}
+
+   ~ScopedTimer()
+   {
+      auto end = std::chrono::high_resolution_clock::now();
+      target += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+   }
+};
+
+// Add a macro to make timing code sections easier
+#define PROFILE_SCOPE(name) ScopedTimer timer##__LINE__(profiler.name##Time)
+
 int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
 {
+   PROFILE_SCOPE(quiescence);
    searchStats.qnodes++; // Count each quiescence node
 
    if (ply >= MAX_PLY - 1)
@@ -133,18 +263,34 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
       return 0;
    }
 
-   int standPat = evaluate(board);
+   // Time the evaluation
+   int standPat;
+   {
+      PROFILE_SCOPE(evaluation);
+      standPat = evaluate(board);
+      profiler.evaluations++;
+   }
+
    if (standPat >= beta)
       return beta;
 
    if (standPat > alpha)
       alpha = standPat;
 
+   // Time the TT lookup
    bool ttHit = false;
    bool is_pvnode = (beta - alpha) > 1;
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
+
+   {
+      PROFILE_SCOPE(ttLookup);
+      profiler.ttLookups++;
+      if (ttHit)
+         profiler.ttHits++;
+   }
+
    if (!is_pvnode && ttHit)
    {
       if ((tte.flag == HFALPHA && tt_score <= alpha) || (tte.flag == HFBETA && tt_score >= beta) ||
@@ -159,15 +305,27 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    Move bestmove = NO_MOVE;
    int moveCount = 0;
 
+   // Time the move generation
    Movelist captures;
-   if (board.sideToMove == White)
-      Movegen::legalmoves<White, CAPTURE>(board, captures);
-   else
-      Movegen::legalmoves<Black, CAPTURE>(board, captures);
+   {
+      PROFILE_SCOPE(moveGen);
+      profiler.moveGens++;
 
-   ScoreMovesForQS(board, captures, tte.move);
-   std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
-   
+      if (board.sideToMove == White)
+         Movegen::legalmoves<White, CAPTURE>(board, captures);
+      else
+         Movegen::legalmoves<Black, CAPTURE>(board, captures);
+
+      profiler.movesGenerated += captures.size;
+   }
+
+   // Time the move ordering
+   {
+      PROFILE_SCOPE(moveOrdering);
+      ScoreMovesForQS(board, captures, tte.move);
+      std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
+   }
+
    // Delta pruning margin - can be tuned
    const int DELTA_MARGIN = deltaPruningMargin(board);
 
@@ -175,50 +333,96 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    {
       Move move = captures[i].move;
 
-      // Apply delta pruning - skip captures that can't improve alpha
-      if (!is_pvnode && !inCheck)
+      // Time pruning checks
+      bool skipMove = false;
       {
-         // Get the captured piece
-         Piece capturedPiece = board.pieceAtB(to(move));
-         
-         // Calculate maximum possible material gain
-         int captureValue = 0;
-         
-         // Convert piece to its value
-         switch (capturedPiece % 6) {
-             case QUEEN:  captureValue = QUEEN_VALUE;  break;
-             case ROOK:   captureValue = ROOK_VALUE;   break;
-             case BISHOP: captureValue = BISHOP_VALUE; break;
-             case KNIGHT: captureValue = KNIGHT_VALUE; break;
-             case PAWN:   captureValue = PAWN_VALUE;   break;
-             default:     captureValue = 0;            break;
-         }
-         
-         // Add promotion value if move is a promotion
-         if (promoted(move)) {
-             // Assume promotion to queen (best case)
-             captureValue += (QUEEN_VALUE - PAWN_VALUE);
-         }
-         
-         // Skip this capture if even with the maximum possible gain it can't improve alpha
-         if (standPat + captureValue + DELTA_MARGIN <= alpha) {
-             continue;
+         PROFILE_SCOPE(pruning);
+         profiler.pruningAttempts++;
+
+         // Apply delta pruning - skip captures that can't improve alpha
+         if (!is_pvnode && !inCheck)
+         {
+            // Get the captured piece
+            Piece capturedPiece = board.pieceAtB(to(move));
+
+            // Calculate maximum possible material gain
+            int captureValue = 0;
+
+            // Convert piece to its value
+            switch (capturedPiece % 6)
+            {
+            case QUEEN:
+               captureValue = QUEEN_VALUE;
+               break;
+            case ROOK:
+               captureValue = ROOK_VALUE;
+               break;
+            case BISHOP:
+               captureValue = BISHOP_VALUE;
+               break;
+            case KNIGHT:
+               captureValue = KNIGHT_VALUE;
+               break;
+            case PAWN:
+               captureValue = PAWN_VALUE;
+               break;
+            default:
+               captureValue = 0;
+               break;
+            }
+
+            // Add promotion value if move is a promotion
+            if (promoted(move))
+            {
+               // Assume promotion to queen (best case)
+               captureValue += (QUEEN_VALUE - PAWN_VALUE);
+            }
+
+            // Skip this capture if even with the maximum possible gain it can't improve alpha
+            if (standPat + captureValue + DELTA_MARGIN <= alpha)
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
          }
       }
 
-      if (!see(board, move, -65))
-      {
+      if (skipMove)
          continue;
+
+      // Time SEE check
+      {
+         PROFILE_SCOPE(see);
+         profiler.seeChecks++;
+
+         if (!see(board, move, -65))
+         {
+            continue;
+         }
       }
+
       if (captures[i].value < GoodCaptureScore && moveCount >= 1)
       {
          continue;
       }
-      board.makeMove(move);
-      table->prefetch_tt(board.hashKey);
+
+      // Time move making
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.makeMove(move);
+         table->prefetch_tt(board.hashKey);
+         profiler.movesMade++;
+      }
+
       moveCount++;
       int score = -quiescence(board, -beta, -alpha, table, ply + 1);
-      board.unmakeMove(move);
+
+      // Time move unmaking
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.unmakeMove(move);
+      }
+
       if (score > bestValue)
       {
          bestmove = move;
@@ -234,8 +438,9 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
          }
       }
    }
-   int flag = bestValue >= beta ? HFBETA : HFALPHA;
 
+   // Store in TT
+   int flag = bestValue >= beta ? HFBETA : HFALPHA;
    table->store(board.hashKey, flag, bestmove, 0, score_to_tt(bestValue, ply), standPat);
 
    return bestValue;
@@ -255,18 +460,29 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
    if (ply >= MAX_PLY - 1)
    {
+      PROFILE_SCOPE(evaluation);
+      profiler.evaluations++;
       return evaluate(board);
    }
-   // TT lookup remains the same
+
+   // TT lookup with timing
    U64 posKey = board.hashKey;
-   table->prefetch_tt(posKey);
    bool ttHit;
    TTEntry &entry = table->probe_entry(posKey, ttHit);
    bool is_pvnode = (beta - alpha) > 1;
-   int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+   int tt_score;
    Move ttMove = NO_MOVE;
 
-   // TT cutoff logic remains the same
+   {
+      PROFILE_SCOPE(ttLookup);
+      table->prefetch_tt(posKey);
+      profiler.ttLookups++;
+      tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+      if (ttHit)
+         profiler.ttHits++;
+   }
+
+   // TT cutoff logic
    if (!is_pvnode && ttHit && entry.depth >= depth)
    {
       searchStats.ttCutoffs++;
@@ -289,33 +505,52 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Get the lastMove from our custom move history
    Move lastMove = getLastMove();
 
-   // Checkmate detection and pruning logic remain the same
+   // Checkmate detection and pruning logic
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    bool isRoot = (ply == 0);
    int staticEval;
    int eval = 0;
 
-   if (ttHit)
+   // Get evaluation with timing
    {
-      ttMove = entry.move;
-      staticEval = entry.eval;
-      eval = tt_score;
-   }
-   else
-   {
-      staticEval = evaluate(board);
+      PROFILE_SCOPE(evaluation);
+      profiler.evaluations++;
+
+      if (ttHit)
+      {
+         ttMove = entry.move;
+         staticEval = entry.eval;
+         eval = tt_score;
+      }
+      else
+      {
+         staticEval = evaluate(board);
+      }
    }
 
-   // Reverse Futility Pruning remains the same
-   if (!is_pvnode && !inCheck && depth <= 8 && eval >= beta)
+   // Pruning section with timing
    {
-      int margin = 120 * depth;
-      if (staticEval - margin >= beta)
-         return beta;
+      PROFILE_SCOPE(pruning);
+
+      // Reverse Futility Pruning
+      if (!is_pvnode && !inCheck && depth <= 8 && eval >= beta)
+      {
+         profiler.pruningAttempts++;
+         int margin = 120 * depth;
+         if (staticEval - margin >= beta)
+         {
+            profiler.pruningSuccesses++;
+            return beta;
+         }
+      }
    }
-   //Null move prunning
+
+   // Null move pruning with timing
    if (!inCheck && !is_pvnode && !isRoot)
    {
+      PROFILE_SCOPE(pruning);
+      profiler.pruningAttempts++;
+
       // More aggressive material condition - require at least one "major" piece
       bool hasMajorPiece = board.pieces(KNIGHT, board.sideToMove) |
                            board.pieces(BISHOP, board.sideToMove) |
@@ -383,6 +618,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                {
                   // Verification search with adaptive strategy
                   searchStats.nullCutoffs++;
+                  profiler.pruningSuccesses++;
 
                   // 1. Skip verification for very deep positions with high margins
                   if (depth >= 12 && nullScore >= beta + 170)
@@ -431,10 +667,14 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   
-   // Stockfish's probabilistic cutoff technique (ProbCut)
+   // ProbCut with timing
    if (!is_pvnode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
    {
+      PROFILE_SCOPE(pruning);
+      profiler.pruningAttempts++;
+
+      // ...existing ProbCut code...
+
       int margin;
       if (std::abs(staticEval) < 150)
       {
@@ -450,61 +690,108 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
       // Try captures that might exceed beta with high probability
       Movelist captureMoves;
-      if (board.sideToMove == White)
-         Movegen::legalmoves<White, CAPTURE>(board, captureMoves);
-      else
-         Movegen::legalmoves<Black, CAPTURE>(board, captureMoves);
+      {
+         PROFILE_SCOPE(moveGen);
+         profiler.moveGens++;
+
+         if (board.sideToMove == White)
+            Movegen::legalmoves<White, CAPTURE>(board, captureMoves);
+         else
+            Movegen::legalmoves<Black, CAPTURE>(board, captureMoves);
+
+         profiler.movesGenerated += captureMoves.size;
+      }
 
       for (int i = 0; i < captureMoves.size; i++)
       {
          Move move = captureMoves[i].move;
 
          // Skip unlikely captures with SEE
-         if (!see(board, move, 200))
-            continue;
+         {
+            PROFILE_SCOPE(see);
+            profiler.seeChecks++;
 
-         board.makeMove(move);
+            if (!see(board, move, 200))
+               continue;
+         }
+
+         // Make/unmake move with timing
+         {
+            PROFILE_SCOPE(moveMaking);
+            board.makeMove(move);
+            profiler.movesMade++;
+         }
+
          int score = -negamax(board, rdepth, -rbeta, -rbeta + 1, table, ply + 1);
-         board.unmakeMove(move);
+
+         {
+            PROFILE_SCOPE(moveMaking);
+            board.unmakeMove(move);
+         }
 
          if (score >= rbeta)
+         {
+            profiler.pruningSuccesses++;
             return score;
+         }
       }
    }
 
-   // Add futility pruning
+   // Futility Pruning with timing
    bool futilityPruning = false;
-   if (!is_pvnode && !inCheck && depth <= 3)
    {
-      int futilityMargin = 70 * depth;
-      futilityPruning = (staticEval + futilityMargin <= alpha);
+      PROFILE_SCOPE(pruning);
+
+      if (!is_pvnode && !inCheck && depth <= 3)
+      {
+         profiler.pruningAttempts++;
+         int futilityMargin = 70 * depth;
+         futilityPruning = (staticEval + futilityMargin <= alpha);
+         if (futilityPruning)
+            profiler.pruningSuccesses++;
+      }
+
+      // Static Null Move Pruning with timing
+      if (!is_pvnode && !inCheck && depth <= 5)
+      {
+         profiler.pruningAttempts++;
+         int margin = depth <= 3 ? 90 * depth : 300 + 50 * (depth - 3);
+         if (staticEval - margin >= beta)
+         {
+            profiler.pruningSuccesses++;
+            return beta;
+         }
+      }
+
+      // Razoring with timing
+      if (!is_pvnode && !inCheck && depth <= 3 && staticEval + 350 * depth < alpha)
+      {
+         profiler.pruningAttempts++;
+         // Try directly going to quiescence search
+         int razorScore = quiescence(board, alpha - 1, alpha, table, ply);
+         if (razorScore < alpha)
+         {
+            profiler.pruningSuccesses++;
+            return razorScore;
+         }
+      }
    }
 
-   // Static Null Move Pruning
-   if (!is_pvnode && !inCheck && depth <= 5)
-   {
-      int margin = depth <= 3 ? 90 * depth : 300 + 50 * (depth - 3);
-      if (staticEval - margin >= beta)
-         return beta;
-   }
-
-   // Razoring - if we're far below alpha, try qsearch
-   if (!is_pvnode && !inCheck && depth <= 3 && staticEval + 350 * depth < alpha)
-   {
-      // Try directly going to quiescence search
-      int razorScore = quiescence(board, alpha - 1, alpha, table, ply);
-      if (razorScore < alpha)
-         return razorScore;
-   }
-
-   // Move generation remains the same
+   // Move generation with timing
    Movelist moves;
-   if (board.sideToMove == White)
-      Movegen::legalmoves<White, ALL>(board, moves);
-   else
-      Movegen::legalmoves<Black, ALL>(board, moves);
+   {
+      PROFILE_SCOPE(moveGen);
+      profiler.moveGens++;
 
-   // Terminal node check remains the same
+      if (board.sideToMove == White)
+         Movegen::legalmoves<White, ALL>(board, moves);
+      else
+         Movegen::legalmoves<Black, ALL>(board, moves);
+
+      profiler.movesGenerated += moves.size;
+   }
+
+   // Terminal node check
    if (static_cast<int>(moves.size) == 0)
    {
       int score = 0;
@@ -516,8 +803,12 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       return score;
    }
 
-   scoreMoves(moves, board, ttMove, ply);
-   std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+   // Move ordering with timing
+   {
+      PROFILE_SCOPE(moveOrdering);
+      scoreMoves(moves, board, ttMove, ply);
+      std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+   }
 
    // Search variables
    int bestScore = -INF_BOUND;
@@ -543,14 +834,18 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Number of moves to search before applying history pruning
    int moveCountThreshold = depth <= 8 ? LateMovePruningCounts[depth] : 256;
 
-
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
 
-      // Early pruning with SEE
-      if (i > 0 && !see(board, move, -65 * depth))
-         continue;
+      // SEE check with timing
+      {
+         PROFILE_SCOPE(see);
+         profiler.seeChecks++;
+
+         if (i > 0 && !see(board, move, -65 * depth))
+            continue;
+      }
 
       // Then in your move loop:
       bool isCapture = is_capture(board, move);
@@ -562,47 +857,77 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
       // Get continuation history score if we have a previous move
       int continuation_score = 0;
-      if (lastMove != NO_MOVE) {
-          Piece lastPiece = board.pieceAtB(to(lastMove));
-          int lastTo = to(lastMove);
-          Piece currPiece = board.pieceAtB(from(move));
-          int currTo = to(move);
-          
-          if (lastPiece != None && currPiece != None) {
-              continuation_score = continuationHistory[lastPiece][lastTo][currPiece][currTo];
-          }
+      if (lastMove != NO_MOVE)
+      {
+         Piece lastPiece = board.pieceAtB(to(lastMove));
+         int lastTo = to(lastMove);
+         Piece currPiece = board.pieceAtB(from(move));
+         int currTo = to(move);
+
+         if (lastPiece != None && currPiece != None)
+         {
+            continuation_score = continuationHistory[lastPiece][lastTo][currPiece][currTo];
+         }
       }
 
       // Combine scores for pruning decision
       int combined_history = history_score;
-      if (lastMove != NO_MOVE) {
-          // Weight the scores (can be adjusted based on testing)
-          combined_history = (history_score * 2 + continuation_score) / 3;
+      if (lastMove != NO_MOVE)
+      {
+         // Weight the scores (can be adjusted based on testing)
+         combined_history = (history_score * 2 + continuation_score) / 3;
       }
 
+      // Apply pruning with timing
       if (futilityPruning && i > 0 && !isCapture && !isPromotion)
+      {
          continue; // Skip this quiet move
+      }
 
       // Update mobility incrementally
       updateMobility(board, move, mobilityScore, board.sideToMove);
 
-      // History-based Late Move Pruning: skip late quiet moves with bad history
-      if (!isRoot && !inCheck && !isCapture && !isPromotion && depth <= 8) 
+      // History-based pruning with timing
+      bool skipMove = false;
       {
-          // Standard count-based LMP
-          if (i >= moveCountThreshold)
-              continue;
-              
-          // History-based pruning: skip quiet moves with very bad history scores
-          if (i > 3 && combined_history <= HistoryPruningThreshold[depth])
-              continue;
-              
-          // Continuation-history based pruning (more aggressive)
-          if (lastMove != NO_MOVE && i > 2 && continuation_score <= ContinuationPruningThreshold[depth])
-              continue;
+         PROFILE_SCOPE(pruning);
+
+         if (!isRoot && !inCheck && !isCapture && !isPromotion && depth <= 8)
+         {
+            profiler.pruningAttempts++;
+
+            // Standard count-based LMP
+            if (i >= moveCountThreshold)
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
+
+            // History-based pruning: skip quiet moves with very bad history scores
+            else if (i > 3 && combined_history <= HistoryPruningThreshold[depth])
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
+
+            // Continuation-history based pruning (more aggressive)
+            else if (lastMove != NO_MOVE && i > 2 && continuation_score <= ContinuationPruningThreshold[depth])
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
+         }
       }
 
-      board.makeMove(move);
+      if (skipMove)
+         continue;
+
+      // Make move with timing
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.makeMove(move);
+         profiler.movesMade++;
+      }
 
       // Add the move to our custom move history
       addMoveToHistory(move, board.hashKey);
@@ -623,22 +948,22 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
          if (i > 4) // More reduction for later moves
             R++;
-            
+
          if (depth > 5) // More reduction for deeper searches
             R++;
 
          // History-based LMR adjustments
          // Reduce less for moves with good history
          if (history_score > 5600)
-            R = std::max(0, R - 1);  // Good history, reduce less
+            R = std::max(0, R - 1); // Good history, reduce less
          else if (history_score < -4000)
-            R++;  // Bad history, reduce more
-            
+            R++; // Bad history, reduce more
+
          // Continuation-history based LMR adjustments
          if (continuation_score > 6000)
-            R = std::max(0, R - 1);  // Good continuation history, reduce less
+            R = std::max(0, R - 1); // Good continuation history, reduce less
          else if (continuation_score < -4000)
-            R++;  // Bad continuation history, reduce more
+            R++; // Bad continuation history, reduce more
 
          // Don't reduce too much for killer moves (likely good tactical moves)
          if (move == killerMoves[ply][0] || move == killerMoves[ply][1])
@@ -648,8 +973,8 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          score = -negamax(board, depth - 1 - R, -alpha - 1, -alpha, table, ply + 1);
          int pieceCount = popcount(board.occAll);
          if (pieceCount < 10)
-             R = std::max(0, R - 1);  // Reduce less in endgames
-         
+            R = std::max(0, R - 1); // Reduce less in endgames
+
          // Only do full search if the reduced search looks promising
          if (score > alpha)
             score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
@@ -672,12 +997,13 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
       // Remove the last move from our history to backtrack
       if (moveHistoryCount > 0)
-          moveHistoryCount--;
-          
-      board.unmakeMove(move);
+         moveHistoryCount--;
 
-      // Restore mobility score
-      updateMobility(board, move, mobilityScore, board.sideToMove);
+      // Unmake move with timing
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.unmakeMove(move);
+      }
 
       // Update best score logic remains the same
       if (score > bestScore)
@@ -698,9 +1024,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                   updateHistory(board, move, depth, true);
 
                   // Now also update countermove and continuation history
-                  if (lastMove != NO_MOVE) {
-                      updateCounterMove(board, lastMove, move);
-                      updateContinuationHistory(board, lastMove, move, depth, true);
+                  if (lastMove != NO_MOVE)
+                  {
+                     updateCounterMove(board, lastMove, move);
+                     updateContinuationHistory(board, lastMove, move, depth, true);
                   }
                }
 
@@ -716,8 +1043,9 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          updateHistory(board, move, depth, false);
 
          // Also update continuation history negatively
-         if (lastMove != NO_MOVE) {
-             updateContinuationHistory(board, lastMove, move, depth, false);
+         if (lastMove != NO_MOVE)
+         {
+            updateContinuationHistory(board, lastMove, move, depth, false);
          }
       }
    }
@@ -791,8 +1119,8 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 
       // Remove the move from history when backtracking
       if (moveHistoryCount > 0)
-          moveHistoryCount--;
-          
+         moveHistoryCount--;
+
       board.unmakeMove(move);
 
       if (moveScore > bestScore)
@@ -823,7 +1151,10 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 {
    searchStats.clear();
+   profiler.reset();   // Reset profiling data
    clearMoveHistory(); // Clear the move history at the start of a new search
+
+   auto startTime = std::chrono::high_resolution_clock::now();
 
    Move bestMove = NO_MOVE;
    int prevScore = 0; // Previous iteration score
@@ -844,9 +1175,9 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          }
          bestScore = std::max(bestScore, score);
          prevScore = score;
-         std::cout << "Depth " << depth << ", Move: "<<convertMoveToUci(bestMove)<<", Score: " << prevScore
-         << ", Nodes: " << searchStats.totalNodes()
-         << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
+         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
+                   << ", Nodes: " << searchStats.totalNodes()
+                   << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
          continue;
       }
 
@@ -906,15 +1237,23 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          // Triple window size for next attempt - THIS IS THE PROBLEM
          windowSize += 25; // Linear growth to prevent exponential growth
       }
-      bestScore= std::max(bestScore, score);
+      bestScore = std::max(bestScore, score);
       // Save this depth's score for next iteration
       prevScore = score;
-      std::cout << "Depth " << depth << ", Move: "<<convertMoveToUci(bestMove)<<", Score: " << prevScore
+      std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
                 << ", Nodes: " << searchStats.totalNodes()
                 << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
    }
-   
-   std::cout<<"\nBest move: " << convertMoveToUci(bestMove) <<" with score: " <<bestScore << std::endl;
+
+   auto endTime = std::chrono::high_resolution_clock::now();
+   auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+
+   std::cout << "\nBest move: " << convertMoveToUci(bestMove) << " with score: " << bestScore << std::endl;
+   std::cout << "Total search time: " << totalTime.count() << " ms" << std::endl;
    searchStats.printStats();
+
+   // Print profiling report
+   profiler.printProfileReport();
+
    return bestMove;
 }
