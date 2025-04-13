@@ -66,9 +66,6 @@ struct MoveHistoryEntry {
     MoveHistoryEntry(Move m, U64 key) : move(m), hashKey(key) {}
 };
 
-// Continuation history - tracks moves played after other moves
-// This is indexed by [piece][to_square][piece][to_square]
-extern int continuationHistory[12][64][12][64];
 
 // Add move to move history
 void addMoveToHistory(Move move, U64 hashKey);

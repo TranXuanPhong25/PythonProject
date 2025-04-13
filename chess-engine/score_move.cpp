@@ -4,6 +4,9 @@
 Move killerMoves[MAX_PLY][2] = {{NO_MOVE}};
 int historyTable[2][64][64] = {{{0}}};
 Move counterMoveTable[12][64] = {{NO_MOVE}};
+// Continuation history table for tracking move sequences
+// [fromPiece][fromSq][toPiece][toSq]
+int continuationHistory[12][64][12][64] = {{{{0}}}};
 
 // Function to add a new killer move
 void addKillerMove(Move move, int ply)

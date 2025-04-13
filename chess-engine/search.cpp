@@ -7,10 +7,6 @@ SearchStats searchStats;
 MoveHistoryEntry moveHistory[MAX_MOVE_HISTORY];
 int moveHistoryCount = 0;
 
-// Continuation history table for tracking move sequences
-// [fromPiece][fromSq][toPiece][toSq]
-int continuationHistory[12][64][12][64] = {{{{0}}}};
-
 // Add a move to the move history stack
 void addMoveToHistory(Move move, U64 hashKey) {
     if (moveHistoryCount < MAX_MOVE_HISTORY) {

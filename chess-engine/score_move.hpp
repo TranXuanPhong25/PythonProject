@@ -24,6 +24,10 @@ extern int historyTable[2][64][64];
 // Index: [piece][to_square] - what move was good after opponent's last move
 extern Move counterMoveTable[12][64];
 
+// Continuation history - tracks moves played after other moves
+// This is indexed by [piece][to_square][piece][to_square]
+extern int continuationHistory[12][64][12][64];
+
 void addKillerMove(Move move, int ply);
 
 // Update history score for a move that caused a beta cutoff
