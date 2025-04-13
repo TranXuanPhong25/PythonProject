@@ -9,9 +9,6 @@ void benchSearch(int depth, TranspositionTable *table)
        "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
-       "8/8/8/8/5kp1/P7/8/1K1N4 w - - 0 1",  // Kc2 - mate
-       "8/8/8/5N2/8/p7/8/2NK3k w - - 0 1",   // Na2 - mate
-       "8/3k4/8/8/8/4B3/4KB2/2B5 w - - 0 1", // draw,
        "4rrk1/2p1b1p1/p1p3q1/4p3/2P2n1p/1P1NR2P/PB3PP1/3R1QK1 b - - 2 24",
        "r3qbrk/6p1/2b2pPp/p3pP1Q/PpPpP2P/3P1B2/2PB3K/R5R1 w - - 16 42",
        "6k1/1R3p2/6p1/2Bp3p/3P2q1/P7/1P2rQ1K/5R2 b - - 4 44",
@@ -40,7 +37,11 @@ void benchSearch(int depth, TranspositionTable *table)
        "r3k2r/ppp1pp1p/2nqb1pn/3p4/4P3/2PP4/PP1NBPPP/R2QK1NR w KQkq - 1 5",
        "3r1rk1/1pp1pn1p/p1n1q1p1/3p4/Q3P3/2P5/PP1NBPPP/4RRK1 w - - 0 12",
        "5rk1/1pp1pn1p/p3Brp1/8/1n6/5N2/PP3PPP/2R2RK1 w - - 2 20",
-       "8/1p2pk1p/p1p1r1p1/3n4/8/5R2/PP3PPP/4R1K1 b - - 3 27"};
+       "8/1p2pk1p/p1p1r1p1/3n4/8/5R2/PP3PPP/4R1K1 b - - 3 27",
+       "8/8/8/8/5kp1/P7/8/1K1N4 w - - 0 1",  // Kc2 - mate
+       "8/8/8/5N2/8/p7/8/2NK3k w - - 0 1",   // Na2 - mate
+       "8/3k4/8/8/8/4B3/4KB2/2B5 w - - 0 1", // draw,
+   };
 
    std::cout << "\nStarting Search Benchmark..." << std::endl;
    int index = 1;
@@ -50,7 +51,7 @@ void benchSearch(int depth, TranspositionTable *table)
       std::cout << "\n"
                 << index++ << " Testing position: " << fen << std::endl;
 
-      table->clear(); // Clear TT between iterations
+      // table->clear(); // Clear TT between iterations
 
       auto start = std::chrono::high_resolution_clock::now();
       Move bestMove = getBestMove(board, depth, table);
@@ -74,9 +75,12 @@ int main()
    TranspositionTable *table;
    auto ttable = std::make_unique<TranspositionTable>();
    table = ttable.get();
-   table->Initialize(64);
+   table->Initialize(128);
    int maxDepth = 13; // Default max depth for benchmarking
-
+   Board board(DEFAULT_POS);
+   for (int d = 1; d <= 8; d++) {
+      getBestMove(board, d, table);
+   }
    // benchPerft(maxDepth);
    auto start = std::chrono::high_resolution_clock::now();
 
