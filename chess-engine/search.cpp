@@ -818,7 +818,7 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 
    Move bestMove = NO_MOVE;
    int prevScore = 0; // Previous iteration score
-
+   int bestScore = 0; // Best score found so far
    // Use full-width window for first three depths
    for (int depth = 1; depth <= maxDepth; depth++)
    {
@@ -833,7 +833,11 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          {
             bestMove = currentBestMove;
          }
+         bestScore = std::max(bestScore, score);
          prevScore = score;
+         std::cout << "Depth " << depth << ", Move: "<<convertMoveToUci(bestMove)<<", Score: " << prevScore
+         << ", Nodes: " << searchStats.totalNodes()
+         << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
          continue;
       }
 
@@ -893,13 +897,15 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          // Triple window size for next attempt - THIS IS THE PROBLEM
          windowSize += 25; // Linear growth to prevent exponential growth
       }
-
+      bestScore= std::max(bestScore, score);
       // Save this depth's score for next iteration
       prevScore = score;
-      std::cout << "Depth " << depth << ", Score: " << prevScore
+      std::cout << "Depth " << depth << ", Move: "<<convertMoveToUci(bestMove)<<", Score: " << prevScore
                 << ", Nodes: " << searchStats.totalNodes()
                 << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
    }
+   
+   std::cout<<"\nBest move: " << convertMoveToUci(bestMove) <<" with score: " <<bestScore << std::endl;
    searchStats.printStats();
    return bestMove;
 }
