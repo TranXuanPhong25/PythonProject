@@ -50,7 +50,7 @@ void benchSearch(int maxDepth, TranspositionTable *table)
       Board board(fen);
       std::cout << "\n"<<index++<<" Testing position: " << fen << std::endl;
 
-      for (int depth = 7; depth <= maxDepth; depth++)
+      for (int depth = 11; depth <= maxDepth; depth++)
       {
          table->clear(); // Clear TT between iterations
 
@@ -86,7 +86,12 @@ int main(int argc, char **argv)
    }
 
    // benchPerft(maxDepth);
+   auto start = std::chrono::high_resolution_clock::now();
+   
    benchSearch(maxDepth, table);
+   auto end = std::chrono::high_resolution_clock::now();
 
+   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+   std::cout<<"\nTotal time taken for all positions: " << duration/1000 << " s" << std::endl;
    return 0;
 }
