@@ -858,7 +858,6 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
                 << ", Nodes: " << searchStats.totalNodes()
                 << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
    }
-   std::cout << "\nSearch completed to depth " << maxDepth << std::endl;
    searchStats.printStats();
    return bestMove;
 }
