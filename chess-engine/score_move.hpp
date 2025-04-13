@@ -1,6 +1,7 @@
 #pragma once
 #include "chess.hpp"
 #include "evaluate.hpp"
+#include "search.hpp"
 #include "types.hpp"
 #include "see.hpp"
 constexpr int mvv_lva[12][12] = {

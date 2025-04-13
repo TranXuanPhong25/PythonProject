@@ -480,6 +480,21 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Initialize mobility score
    int mobilityScore = evaluateMobility(board, board.sideToMove);
 
+   // History-based Late Move Pruning thresholds
+   // Number of moves to consider before starting to prune based on move count
+   // Higher depth = more moves searched before pruning
+   const int LateMovePruningCounts[9] = {0, 8, 12, 22, 36, 56, 96, 160, 256};
+
+   // History score thresholds for pruning - negative values indicate poor moves
+   // More negative = more aggressive pruning at higher depths
+   const int HistoryPruningThreshold[9] = {0, 0, 0, -2000, -4000, -6000, -8000, -10000, -12000};
+
+   // Continuation history thresholds for pruning
+   const int ContinuationPruningThreshold[9] = {0, 0, 0, -3000, -5000, -7000, -9000, -11000, -13000};
+
+   // Number of moves to search before applying history pruning
+   int moveCountThreshold = depth <= 8 ? LateMovePruningCounts[depth] : 256;
+
 
    for (int i = 0; i < moves.size; i++)
    {
