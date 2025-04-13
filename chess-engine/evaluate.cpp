@@ -116,6 +116,15 @@ int evaluate(const Board &board)
    //Evaluate mobility
    score += (board.sideToMove == White ? evaluateMobility(board, White) : -evaluateMobility(board, Black));
 
+   // King safety (middle game)
+    if (getGamePhase(board) < 0.5) { // Middle game
+        score += (board.sideToMove == White ? evaluateKingSafety(board, White) : -evaluateKingSafety(board, Black));
+        score += (board.sideToMove == White ? evaluateKingOpenFiles(board, White) : -evaluateKingOpenFiles(board, Black));
+    }
+
+    //King mobility (both phases)
+    score += (board.sideToMove == White ? evaluateKingMobility(board, White) : -evaluateKingMobility(board, Black));
+
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
 }
