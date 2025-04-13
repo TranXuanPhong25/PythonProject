@@ -7,7 +7,8 @@
 #include "tt.hpp"
 #include "see.hpp"
 #include <algorithm>
-
+#include <cmath>
+#include <math.h>
 using namespace Chess;
 
 // Maximum size for move history stack
