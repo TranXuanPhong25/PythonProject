@@ -182,44 +182,114 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          return beta;
    }
 
-   // Null move pruning with safety limits
    if (!inCheck && !is_pvnode && !isRoot)
    {
-      if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
-      {
-         // Add stack depth check to prevent excessive recursion
-         if (ply < MAX_PLY - 10) // Reserve some stack space
-         {
-            // Cap the dynamic reduction to prevent excessive depth skipping
-            int R = 3;
+      // More aggressive material condition - require at least one "major" piece
+      bool hasMajorPiece = board.pieces(KNIGHT, board.sideToMove) |
+                           board.pieces(BISHOP, board.sideToMove) |
+                           board.pieces(ROOK, board.sideToMove) |
+                           board.pieces(QUEEN, board.sideToMove);
 
-            // Strengthen zugzwang detection criteria
-            bool skipNullMove = getPieceCounts(board, board.sideToMove) <= 3 ||
-                                (board.pieces(PAWN, board.sideToMove) == 0 &&
-                                 getPieceCounts(board, board.sideToMove) <= 5);
+      if (hasMajorPiece && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+      {
+         if (ply < MAX_PLY - 10)
+         {
+            // Adaptive reduction based on multiple factors
+            // 1. Base reduction increases with depth
+            // 2. Higher reduction when eval is far above beta
+            // 3. Lower reduction in endgames
+            int materialCount = popcount(board.occAll);
+            int evalMargin = std::max(0, eval - beta);
+
+            // Start with base reduction that scales with depth
+            int R = 3 + depth / 6;
+
+            // Increase R when significantly above beta
+            if (evalMargin > 100)
+               R++;
+
+            // Decrease R in endgames (less than 16 pieces on board)
+            if (materialCount < 16)
+               R = std::max(2, R - 1);
+
+            // Cap R to reasonable values
+            R = std::min(R, depth / 2 + 2);
+
+            // Enhanced zugzwang detection using multiple criteria
+            bool skipNullMove = false;
+
+            // 1. Few pieces total
+            if (getPieceCounts(board, board.sideToMove) <= 3)
+               skipNullMove = true;
+
+            // 2. King+pawns endgame situations
+            if (board.pieces(PAWN, board.sideToMove) != 0 &&
+                !(board.pieces(KNIGHT, board.sideToMove) |
+                  board.pieces(BISHOP, board.sideToMove) |
+                  board.pieces(ROOK, board.sideToMove) |
+                  board.pieces(QUEEN, board.sideToMove)))
+               skipNullMove = true;
+
+            // 3. King vs King+pawns is often zugzwang-prone
+            if (getPieceCounts(board, board.sideToMove) <= 5 &&
+                board.pieces(PAWN, ~board.sideToMove) != 0)
+               skipNullMove = true;
+
+            // 4. Avoid null move when evaluation is too far below beta
+            if (staticEval < beta - 120 * depth)
+               skipNullMove = true;
 
             if (!skipNullMove)
             {
                board.makeNullMove();
 
-               // Use a reduced-depth search with tighter bounds
+               // Use narrower window for more efficiency
                int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
                board.unmakeNullMove();
 
                if (nullScore >= beta)
                {
-                  // Only do verification search in specific endgame positions
-                  // where zugzwang is more likely
-                  if (getPieceCounts(board, board.sideToMove) <= 4 && R >= 4 && depth >= 5)
+                  // Verification search with adaptive strategy
+
+                  // 1. Skip verification for very deep positions with high margins
+                  if (depth >= 12 && nullScore >= beta + 150)
+                     return beta;
+
+                  // 2. Multi-tiered verification approach
+                  bool needsVerification = false;
+
+                  // Always verify critical endgame positions
+                  if (materialCount <= 14)
+                     needsVerification = true;
+
+                  // Verify deeper searches
+                  if (depth >= 8)
+                     needsVerification = true;
+
+                  // Verify positions where score is just barely above beta
+                  if (nullScore < beta + 50)
+                     needsVerification = true;
+
+                  if (needsVerification)
                   {
-                     // Use a more modest depth for verification
-                     int verificationDepth = std::min(depth - 3, 5);
+                     // Adaptive verification depth
+                     int verificationDepth;
+
+                     // Use deeper verification for endgames (more zugzwang risk)
+                     if (materialCount <= 14)
+                        verificationDepth = std::max(depth / 2, std::min(depth - 2, 6));
+                     else
+                        verificationDepth = std::max(depth / 3, std::min(depth - 3, 5));
+
+                     // Use "safest" window for verification
                      int verificationScore = negamax(board, verificationDepth, beta - 1, beta, table, ply);
+
                      if (verificationScore >= beta)
                         return beta;
                   }
                   else
                   {
+                     // No verification needed
                      return nullScore;
                   }
                }
@@ -272,7 +342,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       return score;
    }
 
-   // Move ordering remains the same
    Move ttMove = ttHit ? entry.move : NO_MOVE;
    scoreMoves(moves, board, ttMove, ply);
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
@@ -283,7 +352,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    uint8_t nodeFlag = HFALPHA;
    int movesSearched = 0;
 
-   // Main search loop with simplified LMR
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
@@ -376,22 +444,11 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   // Store position in TT
    table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board));
-
 
    return bestScore;
 }
 
-// Find the best move at the given depth
-Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table,
-                          int alpha, int beta)
-{
-   int score;
-   return getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
-}
-
-// Modified to return the score
 Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *table,
                                    int alpha, int beta, int *score)
 {
@@ -412,17 +469,23 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    }
 
    // Check if we have a TT move for this position
-   Move ttMove = table->probeMove(board.hashKey);
-   if (ttMove != NO_MOVE)
-   {
-      // Verify the move is legal
-      for (int i = 0; i < moves.size; i++)
-      {
-         if (moves[i].move == ttMove)
-         {
-            // Start with the TT move as best
+   bool ttHit;
+   TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
+   Move ttMove = ttHit ? entry.move : NO_MOVE;
+
+   // Verify the move is legal if we have one
+   if (ttMove != NO_MOVE) {
+      bool moveIsLegal = false;
+      for (int i = 0; i < moves.size; i++) {
+         if (moves[i].move == ttMove) {
+            moveIsLegal = true;
             break;
          }
+      }
+      
+      // If move is not legal, reset it
+      if (!moveIsLegal) {
+         ttMove = NO_MOVE;
       }
    }
 
@@ -543,7 +606,7 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          }
 
          // Triple window size for next attempt - THIS IS THE PROBLEM
-         windowSize += 25;  // Linear growth to prevent exponential growth
+         windowSize += 25; // Linear growth to prevent exponential growth
       }
 
       // Save this depth's score for next iteration

@@ -2,7 +2,7 @@
 #include <bits/unique_ptr.h>
 
 // Benchmark the speed of your search algorithm
-void benchSearch(int maxDepth, TranspositionTable *table)
+void benchSearch(int depth, TranspositionTable *table)
 {
    std::string positions[] = {
        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -40,39 +40,36 @@ void benchSearch(int maxDepth, TranspositionTable *table)
        "r3k2r/ppp1pp1p/2nqb1pn/3p4/4P3/2PP4/PP1NBPPP/R2QK1NR w KQkq - 1 5",
        "3r1rk1/1pp1pn1p/p1n1q1p1/3p4/Q3P3/2P5/PP1NBPPP/4RRK1 w - - 0 12",
        "5rk1/1pp1pn1p/p3Brp1/8/1n6/5N2/PP3PPP/2R2RK1 w - - 2 20",
-       "8/1p2pk1p/p1p1r1p1/3n4/8/5R2/PP3PPP/4R1K1 b - - 3 27"
-   };
+       "8/1p2pk1p/p1p1r1p1/3n4/8/5R2/PP3PPP/4R1K1 b - - 3 27"};
 
    std::cout << "\nStarting Search Benchmark..." << std::endl;
-   int index =1;
+   int index = 1;
    for (const auto &fen : positions)
    {
       Board board(fen);
-      std::cout << "\n"<<index++<<" Testing position: " << fen << std::endl;
+      std::cout << "\n"
+                << index++ << " Testing position: " << fen << std::endl;
 
-      for (int depth = 11; depth <= maxDepth; depth++)
+      table->clear(); // Clear TT between iterations
+
+      auto start = std::chrono::high_resolution_clock::now();
+      Move bestMove = getBestMove(board, depth, table);
+      auto end = std::chrono::high_resolution_clock::now();
+
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+      std::cout << "Depth " << depth << ": Best move "
+                << convertMoveToUci(bestMove);
+
+      if (promoted(bestMove))
       {
-         table->clear(); // Clear TT between iterations
-
-         auto start = std::chrono::high_resolution_clock::now();
-         Move bestMove = getBestMove(board, depth, table);
-         auto end = std::chrono::high_resolution_clock::now();
-
-         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-         std::cout << "Depth " << depth << ": Best move "
-                   << convertMoveToUci(bestMove);
-
-         if (promoted(bestMove))
-         {
-            std::cout << " promotion: " << (int)piece(bestMove);
-         }
-
-         std::cout << " (" << duration << " ms)" << std::endl;
+         std::cout << " promotion: " << (int)piece(bestMove);
       }
+
+      std::cout << " (" << duration << " ms)" << std::endl;
    }
 }
-int main(int argc, char **argv)
+int main()
 {
    TranspositionTable *table;
    auto ttable = std::make_unique<TranspositionTable>();
@@ -80,18 +77,13 @@ int main(int argc, char **argv)
    table->Initialize(64);
    int maxDepth = 13; // Default max depth for benchmarking
 
-   if (argc > 1)
-   {
-      maxDepth = std::stoi(argv[1]);
-   }
-
    // benchPerft(maxDepth);
    auto start = std::chrono::high_resolution_clock::now();
-   
+
    benchSearch(maxDepth, table);
    auto end = std::chrono::high_resolution_clock::now();
 
    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-   std::cout<<"\nTotal time taken for all positions: " << duration/1000 << " s" << std::endl;
+   std::cout << "\nTotal time taken for all positions: " << duration / 1000 << " s" << std::endl;
    return 0;
 }
