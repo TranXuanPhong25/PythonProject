@@ -1,11 +1,8 @@
 #include "uci.hpp"
 #include <iostream>
 
-int main(int argv, char *argc[])
+int main()
 {
-   // init search
-
-   
-   uci_loop(argv, argc);
+   uci_loop();
    return 0;
 }
