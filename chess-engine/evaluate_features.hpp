@@ -1,6 +1,8 @@
 #pragma once
-
-#include "chess.hpp" 
+#include "evaluate.hpp" 
+#include "score_move.hpp"
+#include "chess.hpp"
+#include <vector>
 using namespace Chess;
 
 int evaluatePawnStructure(const Board& board);

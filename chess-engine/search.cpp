@@ -1,8 +1,4 @@
 #include "search.hpp"
-#include "evaluate.hpp"
-#include "evaluate_features.hpp"
-
-#include <algorithm>
 
 int getPieceCounts(const Board &board, Color color)
 {

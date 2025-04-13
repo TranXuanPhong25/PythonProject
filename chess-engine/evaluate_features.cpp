@@ -1,8 +1,5 @@
 #include "evaluate_features.hpp"
-#include "evaluate.hpp" 
-#include "score_move.hpp"
-#include "chess.hpp"
-#include <vector>
+
 using namespace Chess;
 
 

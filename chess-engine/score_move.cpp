@@ -1,6 +1,5 @@
 #include "score_move.hpp"
-#include "evaluate.hpp"
-#include "evaluate_features.hpp"
+
 Move killerMoves[MAX_PLY][2] = {{NO_MOVE}};
 int historyTable[2][64][64] = {{{0}}};
 
