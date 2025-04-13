@@ -245,11 +245,11 @@ int evaluateConnectedPawns(const Board &board, Color color) {
         if (connected & board.pieces(PAWN, color)) {
             bonus += 12; // Bonus for connected pawns
 
-            // Check if the pawn is part of a historical good move
-            int side = (color == White) ? 0 : 1;
-            if (historyTable[side][sq][connected]) {
-                bonus += 10; // Thưởng thêm nếu quân tốt liên quan đến nước đi tốt trong lịch sử
-            }
+            // // Check if the pawn is part of a historical good move
+            // int side = (color == White) ? 0 : 1;
+            // if (historyTable[side][sq][connected]) {
+            //     bonus += 10; // Thưởng thêm nếu quân tốt liên quan đến nước đi tốt trong lịch sử
+            // }
         }
     }
 
