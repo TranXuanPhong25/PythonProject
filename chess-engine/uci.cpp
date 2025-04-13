@@ -9,17 +9,8 @@ static void uci_send_id()
     std::cout << "uciok" << std::endl;
 }
 
-static void set_option(std::istream &is, std::string &token, std::string name, int &value)
-{
-    if (token == name)
-    {
-        is >> std::skipws >> token;
-        is >> std::skipws >> token;
-        value = std::stoi(token);
-    }
-}
 
-int DefaultHashSize = 64;
+int DefaultHashSize = 258;
 int CurrentHashSize = DefaultHashSize;
 int LastHashSize = CurrentHashSize;
 
@@ -27,7 +18,7 @@ bool IsUci = false;
 
 TranspositionTable *table;
 
-void uci_loop(int argv, char **argc)
+void uci_loop()
 {
     std::cout << "Chess Engine Copyright (C) 2023" << std::endl;
 
@@ -37,7 +28,7 @@ void uci_loop(int argv, char **argc)
 
     // Create our board instance
     Board board(DEFAULT_POS);
-    int default_depth = 4; // Default search depth
+    int default_depth = 10; // Default search depth
 
     std::string command;
     std::string token;
@@ -140,8 +131,6 @@ void uci_loop(int argv, char **argc)
             // Initialize variables
             int depth = default_depth; // Default to depth 4 if not specified
 
-            uint64_t nodes = -1;
-
             while (token != "none")
             {
                 if (token == "infinite")
@@ -173,13 +162,6 @@ void uci_loop(int argv, char **argc)
                     continue;
                 }
 
-                if (token == "nodes")
-                {
-                    is >> std::skipws >> token;
-                    nodes = stoi(token);
-                    is >> std::skipws >> token;
-                }
-
                 token = "none";
             }
 
@@ -209,7 +191,7 @@ void uci_loop(int argv, char **argc)
             // Output the best move
             if (bestMove != NO_MOVE)
             {
-                std::cout << "info depth " << depth << " time " << duration << " nodes 0 score cp 0" << std::endl;
+                std::cout << "info depth " << depth << " time " << duration << std::endl;
                 std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
             }
             else
