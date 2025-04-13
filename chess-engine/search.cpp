@@ -1,6 +1,7 @@
 #include "search.hpp"
 
 #include <algorithm>
+SearchStats searchStats;
 
 int getPieceCounts(const Board &board, Color color)
 {
@@ -47,6 +48,8 @@ int score_from_tt(int score, int ply)
 
 int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
 {
+   searchStats.qnodes++; // Count each quiescence node
+
    if (ply >= MAX_PLY - 1)
       return evaluate(board);
    if (board.isRepetition())
@@ -70,7 +73,10 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    {
       if ((tte.flag == HFALPHA && tt_score <= alpha) || (tte.flag == HFBETA && tt_score >= beta) ||
           (tte.flag == HFEXACT))
+      {
+         searchStats.ttCutoffs++;
          return tt_score;
+      }
    }
 
    int bestValue = standPat;
@@ -127,7 +133,8 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
-   // Early return checks remain the same
+   searchStats.nodes++; // Count each regular node
+
    if (depth <= 0)
       return quiescence(board, alpha, beta, table, ply);
 
@@ -150,12 +157,16 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // TT cutoff logic remains the same
    if (!is_pvnode && ttHit && entry.depth >= depth)
    {
+      searchStats.ttCutoffs++;
+
       if (entry.flag == HFEXACT)
          return entry.score;
       if (entry.flag == HFALPHA && entry.score <= alpha)
          return alpha;
       if (entry.flag == HFBETA && entry.score >= beta)
          return beta;
+
+      searchStats.ttCutoffs--;
    }
 
    // Checkmate detection and pruning logic remain the same
@@ -250,9 +261,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                if (nullScore >= beta)
                {
                   // Verification search with adaptive strategy
+                  searchStats.nullCutoffs++;
 
                   // 1. Skip verification for very deep positions with high margins
-                  if (depth >= 12 && nullScore >= beta + 150)
+                  if (depth >= 12 && nullScore >= beta + 170)
                      return beta;
 
                   // 2. Multi-tiered verification approach
@@ -295,6 +307,36 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                }
             }
          }
+      }
+   }
+
+   // Stockfish's probabilistic cutoff technique
+   if (!is_pvnode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
+   {
+      int rbeta = std::min(beta + 100, static_cast<int>(INF_BOUND));
+      int rdepth = depth - 4;
+
+      // Try captures that might exceed beta with high probability
+      Movelist captureMoves;
+      if (board.sideToMove == White)
+         Movegen::legalmoves<White, CAPTURE>(board, captureMoves);
+      else
+         Movegen::legalmoves<Black, CAPTURE>(board, captureMoves);
+
+      for (int i = 0; i < captureMoves.size; i++)
+      {
+         Move move = captureMoves[i].move;
+
+         // Skip unlikely captures with SEE
+         if (!see(board, move, 200))
+            continue;
+
+         board.makeMove(move);
+         int score = -negamax(board, rdepth, -rbeta, -rbeta + 1, table, ply + 1);
+         board.unmakeMove(move);
+
+         if (score >= rbeta)
+            return score;
       }
    }
 
@@ -474,17 +516,21 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    Move ttMove = ttHit ? entry.move : NO_MOVE;
 
    // Verify the move is legal if we have one
-   if (ttMove != NO_MOVE) {
+   if (ttMove != NO_MOVE)
+   {
       bool moveIsLegal = false;
-      for (int i = 0; i < moves.size; i++) {
-         if (moves[i].move == ttMove) {
+      for (int i = 0; i < moves.size; i++)
+      {
+         if (moves[i].move == ttMove)
+         {
             moveIsLegal = true;
             break;
          }
       }
-      
+
       // If move is not legal, reset it
-      if (!moveIsLegal) {
+      if (!moveIsLegal)
+      {
          ttMove = NO_MOVE;
       }
    }
@@ -531,6 +577,8 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 {
+   searchStats.clear();
+
    Move bestMove = NO_MOVE;
    int prevScore = 0; // Previous iteration score
 
@@ -611,7 +659,11 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 
       // Save this depth's score for next iteration
       prevScore = score;
+      std::cout << "Depth " << depth << ", Score: " << prevScore
+                << ", Nodes: " << searchStats.totalNodes()
+                << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
    }
-
+   std::cout << "\nSearch completed to depth " << maxDepth << std::endl;
+   searchStats.printStats();
    return bestMove;
 }
