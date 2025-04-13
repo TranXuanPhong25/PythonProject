@@ -26,3 +26,6 @@ int evaluatePawnMajority(const Board &board, Color color);
 int evaluatePawnStorm(const Board &board, Color color);
 int evaluateMobility(const Board &board, Color color);
 void updateMobility(Board &board, Move move, int &mobilityScore, Color color);
+int evaluateKingSafety(const Board &board, Color color);
+int evaluateKingOpenFiles(const Board &board, Color color);
+int evaluateKingMobility(const Board &board, Color color);

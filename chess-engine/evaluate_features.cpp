@@ -784,16 +784,16 @@ int evaluateMobility(const Board &board, Color color) {
         mobility += popcount(attacks & board.Enemy(color)) * 2;         // Bonus for attacking enemy pieces
     }
 
-    // King
-    Bitboard king = board.pieces(KING, color);
-    if (king) {
-        Square sq = poplsb(king);
-        U64 attacks = KingAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
-        mobility += popcount(attacks) * 2;               // Weight: 2
+    // // King
+    // Bitboard king = board.pieces(KING, color);
+    // if (king) {
+    //     Square sq = poplsb(king);
+    //     U64 attacks = KingAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
+    //     mobility += popcount(attacks) * 2;               // Weight: 2
  
-        // Penalize unsafe king moves (attacks on squares controlled by the enemy)
-        mobility -= popcount(attacks & board.Enemy(color)) * 3;
-    }
+    //     // Penalize unsafe king moves (attacks on squares controlled by the enemy)
+    //     mobility -= popcount(attacks & board.Enemy(color)) * 3;
+    // }
 
     // Penalize blocked pieces (pieces with very low mobility)
     if (mobility < 5) {
@@ -829,4 +829,57 @@ void updateMobility(Board &board, Move move, int &mobilityScore, Color color) {
 
     // Restore the board state (if needed for further calculations)
     board.unmakeMove(move);
+}
+
+int evaluateKingSafety(const Board &board, Color color) {
+    // Create a mutable copy of the board
+    Board mutableBoard = board;
+
+    Square kingSquare = mutableBoard.KingSQ(color);
+    U64 kingZone = KingAttacks(kingSquare) | (1ULL << kingSquare); // King zone includes the king's square
+
+    // Use the mutable copy to call attackersForSide
+    U64 enemyAttacks = mutableBoard.attackersForSide(~color, kingSquare, mutableBoard.occAll);
+
+    int penalty = popcount(kingZone & enemyAttacks) * 10; // Penalty for each attacked square
+    return -penalty;
+}
+
+int evaluateKingMobility(const Board &board, Color color) {
+    float endgameWeight = getGamePhase(board); // 0.0 in opening, 1.0 in endgame
+    float middlegameWeight = 1.0f - endgameWeight;
+    
+    // Get the king's square
+    Square kingSquare = board.KingSQ(color);
+
+    // Calculate the legal moves for the king
+    U64 kingMoves = KingAttacks(kingSquare) & ~board.Us(color); // Exclude friendly pieces
+
+    // Reward for each legal move
+    int mobilityScore = popcount(kingMoves) * 5 * endgameWeight; // Reward mobility in the endgame
+
+    // Penalize unsafe king moves (squares attacked by enemy pieces)
+    U64 unsafeMoves = kingMoves & board.Enemy(color);
+    mobilityScore -= popcount(unsafeMoves) * 3 * middlegameWeight; // Penalize unsafe moves in the middlegame
+
+    return mobilityScore;
+}
+
+int evaluateKingOpenFiles(const Board &board, Color color) {
+    Square kingSquare = board.KingSQ(color);
+    int file = square_file(kingSquare);
+
+    // Check if there are pawns in the king's file
+    Bitboard pawnsInFile = board.pieces(PAWN, color) & MASK_FILE[file];
+    if (!pawnsInFile) {
+        return -20; // Penalty for king on an open file
+    }
+
+    // Check if there are enemy pawns in the king's file
+    Bitboard enemyPawnsInFile = board.pieces(PAWN, ~color) & MASK_FILE[file];
+    if (!enemyPawnsInFile) {
+        return -10; // Smaller penalty for king on a semi-open file
+    }
+
+    return 0; // No penalty if the file is not open or semi-open
 }
