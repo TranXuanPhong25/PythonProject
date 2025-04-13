@@ -108,7 +108,21 @@ int score_from_tt(int score, int ply)
 
    return score;
 }
-
+int deltaPruningMargin(Board &board) {
+   // Base margin
+   int margin = 200;
+   
+   // Adjust for game phase
+   float phase = getGamePhase(board);
+   margin += int(50 * (1.0f - phase)); // Larger margin in endgames
+   
+   // Adjust for king safety - larger margin when king is less safe
+   int kingDanger = evaluateKingSafety(board, board.sideToMove);
+   if (kingDanger > 0)
+       margin += std::min(kingDanger / 5, 100);
+   
+   return margin;
+}
 int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
 {
    searchStats.qnodes++; // Count each quiescence node
@@ -154,16 +168,9 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    ScoreMovesForQS(board, captures, tte.move);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
-
-   // Approximate piece values for delta pruning
-   const int QUEEN_VALUE = 900;
-   const int ROOK_VALUE = 500;
-   const int BISHOP_VALUE = 330;
-   const int KNIGHT_VALUE = 320;
-   const int PAWN_VALUE = 100;
    
    // Delta pruning margin - can be tuned
-   const int DELTA_MARGIN = 200;
+   const int DELTA_MARGIN = deltaPruningMargin(board);
 
    for (int i = 0; i < captures.size; i++)
    {
