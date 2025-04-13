@@ -1,5 +1,4 @@
 #include "search.hpp"
-#include <algorithm>
 
 SearchStats searchStats;
 
@@ -617,10 +616,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       }
       // LMR for quiet moves after first few moves
-      else if (!isRoot && depth >= 3 && !inCheck && !isCapture && !isPromotion)
+      else if (!isRoot && depth >= 5 && !inCheck && !isCapture && !isPromotion)
       {
          // More aggressive reduction formula - vary based on depth and move index
-         int R = 1;
+         int R = int(0.5 + log(depth) * log(i) / 2.0);
 
          if (i > 4) // More reduction for later moves
             R++;
@@ -630,7 +629,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
          // History-based LMR adjustments
          // Reduce less for moves with good history
-         if (history_score > 6000)
+         if (history_score > 5600)
             R = std::max(0, R - 1);  // Good history, reduce less
          else if (history_score < -4000)
             R++;  // Bad history, reduce more
@@ -647,7 +646,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
          // Do reduced search with null window
          score = -negamax(board, depth - 1 - R, -alpha - 1, -alpha, table, ply + 1);
-
+         int pieceCount = popcount(board.occAll);
+         if (pieceCount < 10)
+             R = std::max(0, R - 1);  // Reduce less in endgames
+         
          // Only do full search if the reduced search looks promising
          if (score > alpha)
             score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
