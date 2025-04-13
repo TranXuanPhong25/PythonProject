@@ -496,7 +496,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                if (!isCapture && !isPromotion)
                {
                   addKillerMove(move, ply);
-                  updateHistory(board, move, depth);
+                  updateHistory(board, move, depth,true);
                }
 
                nodeFlag = HFBETA;

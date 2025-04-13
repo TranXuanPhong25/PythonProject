@@ -16,33 +16,28 @@ void addKillerMove(Move move, int ply)
 }
 
 // Update history score for a good move
-void updateHistory(Board &board, Move move, int depth)
+void updateHistory(Board &board, Move move, int depth, bool isCutoff)
 {
     int side = board.sideToMove == White ? 0 : 1;
     int from_sq = from(move);
     int to_sq = to(move);
-
-    // Bonus value proportional to depth
-    int bonus = depth * depth;
-
-    // Add bonus to history score
-    historyTable[side][from_sq][to_sq] += bonus;
-
-    // Prevent overflow by scaling down when scores get too high
-    if (historyTable[side][from_sq][to_sq] > 16000)
-    {
-        // Scale down all history scores
-        for (int i = 0; i < 2; i++)
-        {
-            for (int j = 0; j < 64; j++)
-            {
-                for (int k = 0; k < 64; k++)
-                {
-                    historyTable[i][j][k] /= 2;
-                }
-            }
-        }
-    }
+    
+    // Stockfish-style history update with depth scaling
+    int bonus = std::min(32 * depth * depth, 1024);
+    
+    // Reduce bonus if not a cutoff move
+    if (!isCutoff)
+        bonus = -bonus;
+    
+    // Decay existing history and add new bonus 
+    historyTable[side][from_sq][to_sq] = 
+        historyTable[side][from_sq][to_sq] * 32 / 33 + bonus;
+    
+    // Clamp to prevent overflow
+    if (historyTable[side][from_sq][to_sq] > 20000)
+        historyTable[side][from_sq][to_sq] = 20000;
+    if (historyTable[side][from_sq][to_sq] < -20000)
+        historyTable[side][from_sq][to_sq] = -20000;
 }
 
 // Clear history scores between games

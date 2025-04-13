@@ -23,7 +23,7 @@ extern int historyTable[2][64][64];
 void addKillerMove(Move move, int ply);
 
 // Update history score for a move that caused a beta cutoff
-void updateHistory(Board &board, Move move, int depth);
+void updateHistory(Board &board, Move move, int depth,bool isCutoff);
 
 // Reset history scores (e.g., between games)
 void clearHistory();
