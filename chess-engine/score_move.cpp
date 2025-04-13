@@ -100,29 +100,6 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             int side = board.sideToMove == White ? 0 : 1;
             score = historyTable[side][from(move)][to(move)];
         }
-        // promotions
-        if (promoted(move))
-        {
-            PieceType promoType = piece(move);
-            switch (promoType)
-            {
-            case QUEEN:
-                score += 9900;
-                break;
-            case ROOK:
-                score += 9800;
-                break;
-            case BISHOP:
-                score += 9700;
-                break;
-            case KNIGHT:
-                score += 9600;
-                break;
-            default:
-                break;
-            }
-        }
-
         moves[i].value = score;
     }
 }
