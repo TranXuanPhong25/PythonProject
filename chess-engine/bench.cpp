@@ -89,6 +89,6 @@ int main()
    auto end = std::chrono::high_resolution_clock::now();
 
    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-   std::cout << "\nTotal time taken for all positions: " << duration / 1000 << " s" << std::endl;
+   std::cout << "\nTotal time taken for all positions: " << duration << " s" << std::endl;
    return 0;
 }
