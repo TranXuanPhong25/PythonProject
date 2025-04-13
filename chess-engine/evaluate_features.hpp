@@ -22,3 +22,5 @@ int evaluateFileOpenness(const Board &board, Color color);
 int evaluateSpaceAdvantage(const Board &board, Color color);
 int evaluatePawnMajority(const Board &board, Color color);
 int evaluatePawnStorm(const Board &board, Color color);
+int evaluateMobility(const Board &board, Color color);
+void updateMobility(Board &board, Move move, int &mobilityScore, Color color);
