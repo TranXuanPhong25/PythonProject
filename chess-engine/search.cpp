@@ -1,8 +1,70 @@
 #include "search.hpp"
-#include "evaluate.hpp"
-#include "evaluate_features.hpp"
-
 #include <algorithm>
+
+SearchStats searchStats;
+
+// Global move history stack
+MoveHistoryEntry moveHistory[MAX_MOVE_HISTORY];
+int moveHistoryCount = 0;
+
+// Add a move to the move history stack
+void addMoveToHistory(Move move, U64 hashKey) {
+    if (moveHistoryCount < MAX_MOVE_HISTORY) {
+        moveHistory[moveHistoryCount++] = MoveHistoryEntry(move, hashKey);
+    }
+    else {
+        // If history is full, shift everything down and add at the end
+        for (int i = 0; i < MAX_MOVE_HISTORY - 1; i++) {
+            moveHistory[i] = moveHistory[i + 1];
+        }
+        moveHistory[MAX_MOVE_HISTORY - 1] = MoveHistoryEntry(move, hashKey);
+    }
+}
+
+// Get the last move from history
+Move getLastMove() {
+    if (moveHistoryCount > 0) {
+        return moveHistory[moveHistoryCount - 1].move;
+    }
+    return NO_MOVE;
+}
+
+// Clear the move history
+void clearMoveHistory() {
+    moveHistoryCount = 0;
+}
+
+// Update continuation history for a move that was effective after another move
+void updateContinuationHistory(Board &board, Move prevMove, Move currMove, int depth, bool isCutoff) {
+    if (prevMove == NO_MOVE || currMove == NO_MOVE) 
+        return;
+    
+    // Get pieces and squares for both moves
+    Piece prevPiece = board.pieceAtB(to(prevMove));
+    int prevTo = to(prevMove);
+    
+    Piece currPiece = board.pieceAtB(from(currMove));
+    int currTo = to(currMove);
+    
+    // Skip if any information is invalid
+    if (prevPiece == None || currPiece == None)
+        return;
+    
+    // Update continuation history with bonus or penalty
+    int bonus = std::min(32 * depth * depth, 1024);
+    if (!isCutoff)
+        bonus = -bonus;
+    
+    // Apply the same decay/bonus formula used in regular history
+    continuationHistory[prevPiece][prevTo][currPiece][currTo] = 
+        continuationHistory[prevPiece][prevTo][currPiece][currTo] * 32 / 33 + bonus;
+    
+    // Clamp values to prevent overflow
+    if (continuationHistory[prevPiece][prevTo][currPiece][currTo] > 20000)
+        continuationHistory[prevPiece][prevTo][currPiece][currTo] = 20000;
+    if (continuationHistory[prevPiece][prevTo][currPiece][currTo] < -20000)
+        continuationHistory[prevPiece][prevTo][currPiece][currTo] = -20000;
+}
 
 int getPieceCounts(const Board &board, Color color)
 {
@@ -49,6 +111,8 @@ int score_from_tt(int score, int ply)
 
 int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int ply)
 {
+   searchStats.qnodes++; // Count each quiescence node
+
    if (ply >= MAX_PLY - 1)
       return evaluate(board);
    if (board.isRepetition())
@@ -72,7 +136,10 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    {
       if ((tte.flag == HFALPHA && tt_score <= alpha) || (tte.flag == HFBETA && tt_score >= beta) ||
           (tte.flag == HFEXACT))
+      {
+         searchStats.ttCutoffs++;
          return tt_score;
+      }
    }
 
    int bestValue = standPat;
@@ -129,7 +196,8 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
-   // Early return checks remain the same
+   searchStats.nodes++; // Count each regular node
+
    if (depth <= 0)
       return quiescence(board, alpha, beta, table, ply);
 
@@ -148,17 +216,30 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    TTEntry &entry = table->probe_entry(posKey, ttHit);
    bool is_pvnode = (beta - alpha) > 1;
    int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+   Move ttMove = NO_MOVE;
 
    // TT cutoff logic remains the same
    if (!is_pvnode && ttHit && entry.depth >= depth)
    {
+      searchStats.ttCutoffs++;
+
       if (entry.flag == HFEXACT)
          return entry.score;
       if (entry.flag == HFALPHA && entry.score <= alpha)
          return alpha;
       if (entry.flag == HFBETA && entry.score >= beta)
          return beta;
+
+      searchStats.ttCutoffs--;
    }
+
+   if (ttHit)
+   {
+      ttMove = entry.move;
+   }
+
+   // Get the lastMove from our custom move history
+   Move lastMove = getLastMove();
 
    // Checkmate detection and pruning logic remain the same
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
@@ -168,6 +249,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
    if (ttHit)
    {
+      ttMove = entry.move;
       staticEval = entry.eval;
       eval = tt_score;
    }
@@ -183,45 +265,116 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       if (staticEval - margin >= beta)
          return beta;
    }
-
-   // Null move pruning with safety limits
+   //Null move prunning
    if (!inCheck && !is_pvnode && !isRoot)
    {
-      if (board.nonPawnMat(board.sideToMove) && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
-      {
-         // Add stack depth check to prevent excessive recursion
-         if (ply < MAX_PLY - 10) // Reserve some stack space
-         {
-            // Cap the dynamic reduction to prevent excessive depth skipping
-            int R = 3;
+      // More aggressive material condition - require at least one "major" piece
+      bool hasMajorPiece = board.pieces(KNIGHT, board.sideToMove) |
+                           board.pieces(BISHOP, board.sideToMove) |
+                           board.pieces(ROOK, board.sideToMove) |
+                           board.pieces(QUEEN, board.sideToMove);
 
-            // Strengthen zugzwang detection criteria
-            bool skipNullMove = getPieceCounts(board, board.sideToMove) <= 3 ||
-                                (board.pieces(PAWN, board.sideToMove) == 0 &&
-                                 getPieceCounts(board, board.sideToMove) <= 5);
+      if (hasMajorPiece && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+      {
+         if (ply < MAX_PLY - 10)
+         {
+            // Adaptive reduction based on multiple factors
+            // 1. Base reduction increases with depth
+            // 2. Higher reduction when eval is far above beta
+            // 3. Lower reduction in endgames
+            int materialCount = popcount(board.occAll);
+            int evalMargin = std::max(0, eval - beta);
+
+            // Start with base reduction that scales with depth
+            int R = 3 + depth / 6;
+
+            // Increase R when significantly above beta
+            if (evalMargin > 100)
+               R++;
+
+            // Decrease R in endgames (less than 16 pieces on board)
+            if (materialCount < 16)
+               R = std::max(2, R - 1);
+
+            // Cap R to reasonable values
+            R = std::min(R, depth / 2 + 2);
+
+            // Enhanced zugzwang detection using multiple criteria
+            bool skipNullMove = false;
+
+            // 1. Few pieces total
+            if (getPieceCounts(board, board.sideToMove) <= 3)
+               skipNullMove = true;
+
+            // 2. King+pawns endgame situations
+            if (board.pieces(PAWN, board.sideToMove) != 0 &&
+                !(board.pieces(KNIGHT, board.sideToMove) |
+                  board.pieces(BISHOP, board.sideToMove) |
+                  board.pieces(ROOK, board.sideToMove) |
+                  board.pieces(QUEEN, board.sideToMove)))
+               skipNullMove = true;
+
+            // 3. King vs King+pawns is often zugzwang-prone
+            if (getPieceCounts(board, board.sideToMove) <= 5 &&
+                board.pieces(PAWN, ~board.sideToMove) != 0)
+               skipNullMove = true;
+
+            // 4. Avoid null move when evaluation is too far below beta
+            if (staticEval < beta - 120 * depth)
+               skipNullMove = true;
 
             if (!skipNullMove)
             {
                board.makeNullMove();
 
-               // Use a reduced-depth search with tighter bounds
+               // Use narrower window for more efficiency
                int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
                board.unmakeNullMove();
 
                if (nullScore >= beta)
                {
-                  // Only do verification search in specific endgame positions
-                  // where zugzwang is more likely
-                  if (getPieceCounts(board, board.sideToMove) <= 4 && R >= 4 && depth >= 5)
+                  // Verification search with adaptive strategy
+                  searchStats.nullCutoffs++;
+
+                  // 1. Skip verification for very deep positions with high margins
+                  if (depth >= 12 && nullScore >= beta + 170)
+                     return beta;
+
+                  // 2. Multi-tiered verification approach
+                  bool needsVerification = false;
+
+                  // Always verify critical endgame positions
+                  if (materialCount <= 14)
+                     needsVerification = true;
+
+                  // Verify deeper searches
+                  if (depth >= 8)
+                     needsVerification = true;
+
+                  // Verify positions where score is just barely above beta
+                  if (nullScore < beta + 50)
+                     needsVerification = true;
+
+                  if (needsVerification)
                   {
-                     // Use a more modest depth for verification
-                     int verificationDepth = std::min(depth - 3, 5);
+                     // Adaptive verification depth
+                     int verificationDepth;
+
+                     // Use deeper verification for endgames (more zugzwang risk)
+                     if (materialCount <= 14)
+                        verificationDepth = std::max(depth / 2, std::min(depth - 2, 6));
+                     else
+                        verificationDepth = std::max(depth / 3, std::min(depth - 3, 5));
+
+                     // Use "safest" window for verification
                      int verificationScore = negamax(board, verificationDepth, beta - 1, beta, table, ply);
+
                      if (verificationScore >= beta)
                         return beta;
                   }
                   else
                   {
+                     // No verification needed
                      return nullScore;
                   }
                }
@@ -230,11 +383,52 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
+   
+   // Stockfish's probabilistic cutoff technique (ProbCut)
+   if (!is_pvnode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
+   {
+      int margin;
+      if (std::abs(staticEval) < 150)
+      {
+         margin = 80; // Smaller margin in balanced positions
+      }
+      else
+      {
+         margin = 100 + std::min(30, std::abs(staticEval) / 10);
+      }
+
+      int rbeta = std::min(beta + margin, static_cast<int>(INF_BOUND));
+      int rdepth = depth - 4;
+
+      // Try captures that might exceed beta with high probability
+      Movelist captureMoves;
+      if (board.sideToMove == White)
+         Movegen::legalmoves<White, CAPTURE>(board, captureMoves);
+      else
+         Movegen::legalmoves<Black, CAPTURE>(board, captureMoves);
+
+      for (int i = 0; i < captureMoves.size; i++)
+      {
+         Move move = captureMoves[i].move;
+
+         // Skip unlikely captures with SEE
+         if (!see(board, move, 200))
+            continue;
+
+         board.makeMove(move);
+         int score = -negamax(board, rdepth, -rbeta, -rbeta + 1, table, ply + 1);
+         board.unmakeMove(move);
+
+         if (score >= rbeta)
+            return score;
+      }
+   }
+
    // Add futility pruning
    bool futilityPruning = false;
    if (!is_pvnode && !inCheck && depth <= 3)
    {
-      int futilityMargin = 90 * depth;
+      int futilityMargin = 70 * depth;
       futilityPruning = (staticEval + futilityMargin <= alpha);
    }
 
@@ -274,8 +468,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       return score;
    }
 
-   // Move ordering remains the same
-   Move ttMove = ttHit ? entry.move : NO_MOVE;
    scoreMoves(moves, board, ttMove, ply);
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
@@ -288,7 +480,22 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    // Initialize mobility score
    int mobilityScore = evaluateMobility(board, board.sideToMove);
 
-   // Main search loop with simplified LMR
+   // History-based Late Move Pruning thresholds
+   // Number of moves to consider before starting to prune based on move count
+   // Higher depth = more moves searched before pruning
+   const int LateMovePruningCounts[9] = {0, 8, 12, 22, 36, 56, 96, 160, 256};
+
+   // History score thresholds for pruning - negative values indicate poor moves
+   // More negative = more aggressive pruning at higher depths
+   const int HistoryPruningThreshold[9] = {0, 0, 0, -2000, -4000, -6000, -8000, -10000, -12000};
+
+   // Continuation history thresholds for pruning
+   const int ContinuationPruningThreshold[9] = {0, 0, 0, -3000, -5000, -7000, -9000, -11000, -13000};
+
+   // Number of moves to search before applying history pruning
+   int moveCountThreshold = depth <= 8 ? LateMovePruningCounts[depth] : 256;
+
+
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
@@ -301,13 +508,57 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       bool isCapture = is_capture(board, move);
       bool isPromotion = promoted(move);
 
+      // Get history score for this move to use in pruning decisions
+      int side = board.sideToMove == White ? 0 : 1;
+      int history_score = historyTable[side][from(move)][to(move)];
+
+      // Get continuation history score if we have a previous move
+      int continuation_score = 0;
+      if (lastMove != NO_MOVE) {
+          Piece lastPiece = board.pieceAtB(to(lastMove));
+          int lastTo = to(lastMove);
+          Piece currPiece = board.pieceAtB(from(move));
+          int currTo = to(move);
+          
+          if (lastPiece != None && currPiece != None) {
+              continuation_score = continuationHistory[lastPiece][lastTo][currPiece][currTo];
+          }
+      }
+
+      // Combine scores for pruning decision
+      int combined_history = history_score;
+      if (lastMove != NO_MOVE) {
+          // Weight the scores (can be adjusted based on testing)
+          combined_history = (history_score * 2 + continuation_score) / 3;
+      }
+
       if (futilityPruning && i > 0 && !isCapture && !isPromotion)
          continue; // Skip this quiet move
 
       // Update mobility incrementally
       updateMobility(board, move, mobilityScore, board.sideToMove);
 
+      // History-based Late Move Pruning: skip late quiet moves with bad history
+      if (!isRoot && !inCheck && !isCapture && !isPromotion && depth <= 8) 
+      {
+          // Standard count-based LMP
+          if (i >= moveCountThreshold)
+              continue;
+              
+          // History-based pruning: skip quiet moves with very bad history scores
+          if (i > 3 && combined_history <= HistoryPruningThreshold[depth])
+              continue;
+              
+          // Continuation-history based pruning (more aggressive)
+          if (lastMove != NO_MOVE && i > 2 && continuation_score <= ContinuationPruningThreshold[depth])
+              continue;
+      }
+
       board.makeMove(move);
+
+      // Add the move to our custom move history
+      addMoveToHistory(move, board.hashKey);
+
       movesSearched++;
 
       int score;
@@ -320,14 +571,26 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       else if (!isRoot && depth >= 3 && !inCheck && !isCapture && !isPromotion)
       {
          // More aggressive reduction formula - vary based on depth and move index
-         // Higher numbers = more pruning = faster search
          int R = 1;
 
          if (i > 4) // More reduction for later moves
             R++;
-
+            
          if (depth > 5) // More reduction for deeper searches
             R++;
+
+         // History-based LMR adjustments
+         // Reduce less for moves with good history
+         if (history_score > 6000)
+            R = std::max(0, R - 1);  // Good history, reduce less
+         else if (history_score < -4000)
+            R++;  // Bad history, reduce more
+            
+         // Continuation-history based LMR adjustments
+         if (continuation_score > 6000)
+            R = std::max(0, R - 1);  // Good continuation history, reduce less
+         else if (continuation_score < -4000)
+            R++;  // Bad continuation history, reduce more
 
          // Don't reduce too much for killer moves (likely good tactical moves)
          if (move == killerMoves[ply][0] || move == killerMoves[ply][1])
@@ -356,6 +619,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       }
 
+      // Remove the last move from our history to backtrack
+      if (moveHistoryCount > 0)
+          moveHistoryCount--;
+          
       board.unmakeMove(move);
 
       // Restore mobility score
@@ -377,7 +644,13 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                if (!isCapture && !isPromotion)
                {
                   addKillerMove(move, ply);
-                  updateHistory(board, move, depth);
+                  updateHistory(board, move, depth, true);
+
+                  // Now also update countermove and continuation history
+                  if (lastMove != NO_MOVE) {
+                      updateCounterMove(board, lastMove, move);
+                      updateContinuationHistory(board, lastMove, move, depth, true);
+                  }
                }
 
                nodeFlag = HFBETA;
@@ -385,24 +658,24 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
             }
          }
       }
+
+      // For non-cutoff quiet moves, update history negatively
+      if (!isCapture && !isPromotion)
+      {
+         updateHistory(board, move, depth, false);
+
+         // Also update continuation history negatively
+         if (lastMove != NO_MOVE) {
+             updateContinuationHistory(board, lastMove, move, depth, false);
+         }
+      }
    }
 
-   // Store position in TT
    table->store(posKey, nodeFlag, bestMove, depth, bestScore, evaluate(board));
-
 
    return bestScore;
 }
 
-// Find the best move at the given depth
-Move getBestMoveIterative(Board &board, int depth, TranspositionTable *table,
-                          int alpha, int beta)
-{
-   int score;
-   return getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
-}
-
-// Modified to return the score
 Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *table,
                                    int alpha, int beta, int *score)
 {
@@ -423,17 +696,27 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    }
 
    // Check if we have a TT move for this position
-   Move ttMove = table->probeMove(board.hashKey);
+   bool ttHit;
+   TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
+   Move ttMove = ttHit ? entry.move : NO_MOVE;
+
+   // Verify the move is legal if we have one
    if (ttMove != NO_MOVE)
    {
-      // Verify the move is legal
+      bool moveIsLegal = false;
       for (int i = 0; i < moves.size; i++)
       {
          if (moves[i].move == ttMove)
          {
-            // Start with the TT move as best
+            moveIsLegal = true;
             break;
          }
+      }
+
+      // If move is not legal, reset it
+      if (!moveIsLegal)
+      {
+         ttMove = NO_MOVE;
       }
    }
 
@@ -449,7 +732,16 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    {
       Move move = moves[i].move;
       board.makeMove(move);
+
+      // Add move to our custom history
+      addMoveToHistory(move, board.hashKey);
+
       int moveScore = -negamax(board, depth - 1, -beta, -alpha, table, 1);
+
+      // Remove the move from history when backtracking
+      if (moveHistoryCount > 0)
+          moveHistoryCount--;
+          
       board.unmakeMove(move);
 
       if (moveScore > bestScore)
@@ -479,6 +771,9 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 {
+   searchStats.clear();
+   clearMoveHistory(); // Clear the move history at the start of a new search
+
    Move bestMove = NO_MOVE;
    int prevScore = 0; // Previous iteration score
 
@@ -554,12 +849,15 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          }
 
          // Triple window size for next attempt - THIS IS THE PROBLEM
-         windowSize += 25;  // Linear growth to prevent exponential growth
+         windowSize += 25; // Linear growth to prevent exponential growth
       }
 
       // Save this depth's score for next iteration
       prevScore = score;
+      std::cout << "Depth " << depth << ", Score: " << prevScore
+                << ", Nodes: " << searchStats.totalNodes()
+                << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
    }
-
+   searchStats.printStats();
    return bestMove;
 }

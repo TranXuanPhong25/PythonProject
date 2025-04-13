@@ -6,4 +6,6 @@
 #include <iostream>
 #include <sstream>
 #include <bits/unique_ptr.h>
-void uci_loop(int argv, char** argc);
+#include "search.hpp" 
+
+void uci_loop();
