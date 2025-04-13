@@ -1,7 +1,74 @@
 #include "search.hpp"
-
 #include <algorithm>
+
 SearchStats searchStats;
+
+// Global move history stack
+MoveHistoryEntry moveHistory[MAX_MOVE_HISTORY];
+int moveHistoryCount = 0;
+
+// Continuation history table for tracking move sequences
+// [fromPiece][fromSq][toPiece][toSq]
+int continuationHistory[12][64][12][64] = {{{{0}}}};
+
+// Add a move to the move history stack
+void addMoveToHistory(Move move, U64 hashKey) {
+    if (moveHistoryCount < MAX_MOVE_HISTORY) {
+        moveHistory[moveHistoryCount++] = MoveHistoryEntry(move, hashKey);
+    }
+    else {
+        // If history is full, shift everything down and add at the end
+        for (int i = 0; i < MAX_MOVE_HISTORY - 1; i++) {
+            moveHistory[i] = moveHistory[i + 1];
+        }
+        moveHistory[MAX_MOVE_HISTORY - 1] = MoveHistoryEntry(move, hashKey);
+    }
+}
+
+// Get the last move from history
+Move getLastMove() {
+    if (moveHistoryCount > 0) {
+        return moveHistory[moveHistoryCount - 1].move;
+    }
+    return NO_MOVE;
+}
+
+// Clear the move history
+void clearMoveHistory() {
+    moveHistoryCount = 0;
+}
+
+// Update continuation history for a move that was effective after another move
+void updateContinuationHistory(Board &board, Move prevMove, Move currMove, int depth, bool isCutoff) {
+    if (prevMove == NO_MOVE || currMove == NO_MOVE) 
+        return;
+    
+    // Get pieces and squares for both moves
+    Piece prevPiece = board.pieceAtB(to(prevMove));
+    int prevTo = to(prevMove);
+    
+    Piece currPiece = board.pieceAtB(from(currMove));
+    int currTo = to(currMove);
+    
+    // Skip if any information is invalid
+    if (prevPiece == None || currPiece == None)
+        return;
+    
+    // Update continuation history with bonus or penalty
+    int bonus = std::min(32 * depth * depth, 1024);
+    if (!isCutoff)
+        bonus = -bonus;
+    
+    // Apply the same decay/bonus formula used in regular history
+    continuationHistory[prevPiece][prevTo][currPiece][currTo] = 
+        continuationHistory[prevPiece][prevTo][currPiece][currTo] * 32 / 33 + bonus;
+    
+    // Clamp values to prevent overflow
+    if (continuationHistory[prevPiece][prevTo][currPiece][currTo] > 20000)
+        continuationHistory[prevPiece][prevTo][currPiece][currTo] = 20000;
+    if (continuationHistory[prevPiece][prevTo][currPiece][currTo] < -20000)
+        continuationHistory[prevPiece][prevTo][currPiece][currTo] = -20000;
+}
 
 int getPieceCounts(const Board &board, Color color)
 {
@@ -153,6 +220,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    TTEntry &entry = table->probe_entry(posKey, ttHit);
    bool is_pvnode = (beta - alpha) > 1;
    int tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+   Move ttMove = NO_MOVE;
 
    // TT cutoff logic remains the same
    if (!is_pvnode && ttHit && entry.depth >= depth)
@@ -169,6 +237,14 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       searchStats.ttCutoffs--;
    }
 
+   if (ttHit)
+   {
+      ttMove = entry.move;
+   }
+
+   // Get the lastMove from our custom move history
+   Move lastMove = getLastMove();
+
    // Checkmate detection and pruning logic remain the same
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    bool isRoot = (ply == 0);
@@ -177,6 +253,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
    if (ttHit)
    {
+      ttMove = entry.move;
       staticEval = entry.eval;
       eval = tt_score;
    }
@@ -192,7 +269,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       if (staticEval - margin >= beta)
          return beta;
    }
-
+   //Null move prunning
    if (!inCheck && !is_pvnode && !isRoot)
    {
       // More aggressive material condition - require at least one "major" piece
@@ -310,7 +387,8 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   // Stockfish's probabilistic cutoff technique ===== probcut
+   
+   // Stockfish's probabilistic cutoff technique (ProbCut)
    if (!is_pvnode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
    {
       int margin;
@@ -394,7 +472,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       return score;
    }
 
-   Move ttMove = ttHit ? entry.move : NO_MOVE;
    scoreMoves(moves, board, ttMove, ply);
    std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
@@ -404,8 +481,19 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    uint8_t nodeFlag = HFALPHA;
    int movesSearched = 0;
 
-   // Add this before the move loop
+   // History-based Late Move Pruning thresholds
+   // Number of moves to consider before starting to prune based on move count
+   // Higher depth = more moves searched before pruning
    const int LateMovePruningCounts[9] = {0, 8, 12, 22, 36, 56, 96, 160, 256};
+
+   // History score thresholds for pruning - negative values indicate poor moves
+   // More negative = more aggressive pruning at higher depths
+   const int HistoryPruningThreshold[9] = {0, 0, 0, -2000, -4000, -6000, -8000, -10000, -12000};
+
+   // Continuation history thresholds for pruning
+   const int ContinuationPruningThreshold[9] = {0, 0, 0, -3000, -5000, -7000, -9000, -11000, -13000};
+
+   // Number of moves to search before applying history pruning
    int moveCountThreshold = depth <= 8 ? LateMovePruningCounts[depth] : 256;
 
    for (int i = 0; i < moves.size; i++)
@@ -420,16 +508,54 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       bool isCapture = is_capture(board, move);
       bool isPromotion = promoted(move);
 
+      // Get history score for this move to use in pruning decisions
+      int side = board.sideToMove == White ? 0 : 1;
+      int history_score = historyTable[side][from(move)][to(move)];
+
+      // Get continuation history score if we have a previous move
+      int continuation_score = 0;
+      if (lastMove != NO_MOVE) {
+          Piece lastPiece = board.pieceAtB(to(lastMove));
+          int lastTo = to(lastMove);
+          Piece currPiece = board.pieceAtB(from(move));
+          int currTo = to(move);
+          
+          if (lastPiece != None && currPiece != None) {
+              continuation_score = continuationHistory[lastPiece][lastTo][currPiece][currTo];
+          }
+      }
+
+      // Combine scores for pruning decision
+      int combined_history = history_score;
+      if (lastMove != NO_MOVE) {
+          // Weight the scores (can be adjusted based on testing)
+          combined_history = (history_score * 2 + continuation_score) / 3;
+      }
+
       if (futilityPruning && i > 0 && !isCapture && !isPromotion)
          continue; // Skip this quiet move
 
-      if (!isRoot && !inCheck && !isCapture && !isPromotion && !inCheck && 
-          i >= moveCountThreshold && depth <= 8)
+      // History-based Late Move Pruning: skip late quiet moves with bad history
+      if (!isRoot && !inCheck && !isCapture && !isPromotion && depth <= 8) 
       {
-          continue;  // Skip this quiet move - too late in the list
+          // Standard count-based LMP
+          if (i >= moveCountThreshold)
+              continue;
+              
+          // History-based pruning: skip quiet moves with very bad history scores
+          if (i > 3 && combined_history <= HistoryPruningThreshold[depth])
+              continue;
+              
+          // Continuation-history based pruning (more aggressive)
+          if (lastMove != NO_MOVE && i > 2 && continuation_score <= ContinuationPruningThreshold[depth])
+              continue;
       }
 
       board.makeMove(move);
+
+      // Add the move to our custom move history
+      addMoveToHistory(move, board.hashKey);
+
       movesSearched++;
 
       int score;
@@ -442,14 +568,26 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       else if (!isRoot && depth >= 3 && !inCheck && !isCapture && !isPromotion)
       {
          // More aggressive reduction formula - vary based on depth and move index
-         // Higher numbers = more pruning = faster search
          int R = 1;
 
          if (i > 4) // More reduction for later moves
             R++;
-
+            
          if (depth > 5) // More reduction for deeper searches
             R++;
+
+         // History-based LMR adjustments
+         // Reduce less for moves with good history
+         if (history_score > 6000)
+            R = std::max(0, R - 1);  // Good history, reduce less
+         else if (history_score < -4000)
+            R++;  // Bad history, reduce more
+            
+         // Continuation-history based LMR adjustments
+         if (continuation_score > 6000)
+            R = std::max(0, R - 1);  // Good continuation history, reduce less
+         else if (continuation_score < -4000)
+            R++;  // Bad continuation history, reduce more
 
          // Don't reduce too much for killer moves (likely good tactical moves)
          if (move == killerMoves[ply][0] || move == killerMoves[ply][1])
@@ -478,6 +616,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       }
 
+      // Remove the last move from our history to backtrack
+      if (moveHistoryCount > 0)
+          moveHistoryCount--;
+          
       board.unmakeMove(move);
 
       // Update best score logic remains the same
@@ -496,12 +638,29 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                if (!isCapture && !isPromotion)
                {
                   addKillerMove(move, ply);
-                  updateHistory(board, move, depth,true);
+                  updateHistory(board, move, depth, true);
+
+                  // Now also update countermove and continuation history
+                  if (lastMove != NO_MOVE) {
+                      updateCounterMove(board, lastMove, move);
+                      updateContinuationHistory(board, lastMove, move, depth, true);
+                  }
                }
 
                nodeFlag = HFBETA;
                break;
             }
+         }
+      }
+
+      // For non-cutoff quiet moves, update history negatively
+      if (!isCapture && !isPromotion)
+      {
+         updateHistory(board, move, depth, false);
+
+         // Also update continuation history negatively
+         if (lastMove != NO_MOVE) {
+             updateContinuationHistory(board, lastMove, move, depth, false);
          }
       }
    }
@@ -567,7 +726,16 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    {
       Move move = moves[i].move;
       board.makeMove(move);
+
+      // Add move to our custom history
+      addMoveToHistory(move, board.hashKey);
+
       int moveScore = -negamax(board, depth - 1, -beta, -alpha, table, 1);
+
+      // Remove the move from history when backtracking
+      if (moveHistoryCount > 0)
+          moveHistoryCount--;
+          
       board.unmakeMove(move);
 
       if (moveScore > bestScore)
@@ -598,6 +766,7 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
 {
    searchStats.clear();
+   clearMoveHistory(); // Clear the move history at the start of a new search
 
    Move bestMove = NO_MOVE;
    int prevScore = 0; // Previous iteration score
