@@ -6,6 +6,8 @@
 #include "score_move.hpp"
 #include "tt.hpp"
 #include "see.hpp"
+#include <algorithm>
+
 using namespace Chess;
 
 // Maximum size for move history stack

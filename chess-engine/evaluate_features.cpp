@@ -1,7 +1,5 @@
 #include "evaluate_features.hpp"
-#include "evaluate.hpp" 
-#include "chess.hpp"
-#include <vector>
+
 using namespace Chess;
 
 
@@ -31,6 +29,30 @@ int evaluatePawnStructure(const Board &board) {
 
     score += evaluatePawnChains(board, White);
     score -= evaluatePawnChains(board, Black);
+
+    score += evaluatePawnShield(board, White);
+    score -= evaluatePawnShield(board, Black);
+
+    score += evaluateBackwardPawns(board, White);
+    score -= evaluateBackwardPawns(board, Black);
+
+    score += evaluateHolesAndOutposts(board, White);
+    score -= evaluateHolesAndOutposts(board, Black);
+
+    score += evaluatePawnLeverThreats(board, White);
+    score -= evaluatePawnLeverThreats(board, Black);
+
+    score += evaluateFileOpenness(board, White);
+    score -= evaluateFileOpenness(board, Black);
+
+    score += evaluateSpaceAdvantage(board, White);
+    score -= evaluateSpaceAdvantage(board, Black);
+
+    score += evaluatePawnMajority(board, White);
+    score -= evaluatePawnMajority(board, Black);
+
+    score += evaluatePawnStorm(board, White);
+    score -= evaluatePawnStorm(board, Black);
 
     return score;
 }
@@ -136,6 +158,14 @@ int evaluatePassedPawns(const Board &board, Color color) {
             // Bonus point for queens-pawn
             if (advancement >= 5)
                 bonus += 10;
+                
+            // Check if the pawn is part of a killer move
+            for (int ply = 0; ply < MAX_PLY; ++ply) {
+                if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
+                    bonus += 20; // Bonus if part of a killer move
+                    break;
+                }
+            }
         }
     }
 
@@ -211,6 +241,12 @@ int evaluateConnectedPawns(const Board &board, Color color) {
 
         if (connected & board.pieces(PAWN, color)) {
             bonus += 12; // Bonus for connected pawns
+
+            // // Check if the pawn is part of a historical good move
+            // int side = (color == White) ? 0 : 1;
+            // if (historyTable[side][sq][connected]) {
+            //     bonus += 10; // Thưởng thêm nếu quân tốt liên quan đến nước đi tốt trong lịch sử
+            // }
         }
     }
 
@@ -290,3 +326,507 @@ int evaluatePawnChains(const Board &board, Color color) {
     return bonus;
 }
 
+int evaluatePawnShield(const Board &board, Color color) {
+    int bonus = 0;
+
+    Square kingSquare = board.KingSQ(color);
+    int kingRank = square_rank(kingSquare);
+    int kingFile = square_file(kingSquare);
+
+    int shieldRank = (color == White) ? kingRank + 1 : kingRank - 1;
+
+    if (shieldRank >= 0 && shieldRank < 8) {
+        for (int df = -1; df <= 1; ++df) {
+            int shieldFile = kingFile + df;
+            if (shieldFile >= 0 && shieldFile < 8) {
+                Square shieldSquare = file_rank_square(File(shieldFile), Rank(shieldRank));
+                if (board.pieceAtB(shieldSquare) == makePiece(PAWN, color)) {
+                    int center_bonus = (shieldFile == 3 || shieldFile == 4) ? 12 : 10;
+                    bonus += center_bonus;
+
+                    // Check killer moves
+                    for (int ply = 0; ply < MAX_PLY; ++ply) {
+                        if (killerMoves[ply][0] == shieldSquare || killerMoves[ply][1] == shieldSquare) {
+                            bonus += 15;
+                            break;
+                        }
+                    }
+
+                    // Check history heuristic
+                    int side = (color == White) ? 0 : 1;
+                    if (historyTable[side][kingSquare][shieldSquare] > 0) {
+                        bonus += 10;
+                    }
+                }
+            }
+        }
+    }
+
+    return bonus;
+}
+
+
+int evaluateBackwardPawns(const Board &board, Color color) {
+    Bitboard pawns = board.pieces(PAWN, color);
+    Bitboard enemyPawns = board.pieces(PAWN, ~color);
+    int penalty = 0;
+
+    while (pawns) {
+        Square sq = static_cast<Square>(pop_lsb(pawns));
+        int file = square_file(sq);
+        int rank = square_rank(sq);
+
+        // The square in front of the pawn
+        int frontRank = (color == White) ? rank + 1 : rank - 1;
+        if (frontRank < 0 || frontRank >= 8) continue;
+
+        Square frontSquare = file_rank_square(File(file), Rank(frontRank));
+        bool blocked = board.pieceAtB(frontSquare) != None; // Check if blocked
+
+        // Check if the pawn is blocked by an enemy pawn
+        Bitboard enemyAttacks = PawnAttacks(sq, ~color);
+        bool controlled = enemyAttacks & (1ULL << frontSquare);
+
+        // Check if the pawn is supported by another pawn
+        bool supported = false;
+        for (int df = -1; df <= 1; df += 2) {
+            int adjFile = file + df;
+            if (adjFile >= 0 && adjFile < 8) {
+                Square supportSq = file_rank_square(File(adjFile), Rank(rank));
+                if (board.pieceAtB(supportSq) == makePiece(PAWN, color)) {
+                    supported = true;
+                    break;
+                }
+            }
+        }
+
+        // If the pawn is blocked or controlled by an enemy pawn and not supported, apply penalty
+        if (!supported && (blocked || controlled)) {
+            penalty += 15;
+        }
+    }
+
+    return penalty;
+}
+
+int evaluateHolesAndOutposts(const Board &board, Color color) {
+    int bonus = 0;
+
+    // Tính toán các ô trống bằng cách lấy tất cả các ô và loại bỏ các ô bị chiếm
+    Bitboard allPieces = board.All();
+    Bitboard emptySquares = ~allPieces;
+
+    // Duyệt qua từng ô trên bàn cờ
+    for (int sq = 0; sq < 64; ++sq) {
+        if (!(emptySquares & (1ULL << sq))) continue;
+
+        Square square = static_cast<Square>(sq);
+        int rank = square_rank(square);
+        int file = square_file(square);
+
+        // Nếu ô không bị kiểm soát bởi tốt đối phương => đây có thể là một tiền đồn
+        if (!(PawnAttacks(square, ~color) & board.pieces(PAWN, ~color))) {
+            bonus += 5;
+
+            // Nếu ô nằm ở trung tâm (16 ô trung tâm)
+            if (rank >= 2 && rank <= 5 && file >= 2 && file <= 5) {
+                bonus += 5;
+            }
+
+            // Kiểm tra nếu ô này liên quan đến một killer move
+            for (int ply = 0; ply < MAX_PLY; ++ply) {
+                if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
+                    bonus += 10;
+                    break;
+                }
+            }
+
+            // Kiểm tra nếu ô này liên quan đến một nước đi tốt trong lịch sử
+            int side = (color == White) ? 0 : 1;
+            if (historyTable[side][board.KingSQ(color)][sq] > 0) {
+                bonus += 10;
+            }
+        }
+    }
+
+    return bonus;
+}
+
+int evaluatePawnLeverThreats(const Board &board, Color color) {
+    int bonus = 0;
+
+    Bitboard pawns = board.pieces(PAWN, color);
+    Bitboard enemyPawns = board.pieces(PAWN, ~color);
+
+    // Create a mutable copy of the board to avoid const issues
+    Board &mutableBoard = const_cast<Board &>(board);
+
+    while (pawns) {
+        Square from = static_cast<Square>(pop_lsb(pawns));
+
+        // Check if the pawn is supported by another pawn
+        if (PawnAttacks(from, color) & board.pieces(PAWN, color)) {
+            bonus += 5; 
+        }
+
+        // Check if the pawn is attacked and not supported
+        if (!(PawnAttacks(from, color) & board.pieces(PAWN, color)) &&
+            mutableBoard.attackersForSide(~color, from, mutableBoard.All())) {
+            bonus -= 3; // Penalty for being attacked without support
+        }
+
+        Bitboard attacks = PawnAttacks(from, color) & enemyPawns;
+
+        // Check if the pawn can attack enemy pawns
+        while (attacks) {
+            Square target = static_cast<Square>(pop_lsb(attacks));
+
+            // Check if the pawn is on the edge files (A or H)
+            int file = square_file(target);
+            if (file == 0 || file == 7) {
+                bonus -= 2; 
+            }
+
+            // Check if the pawn is on center squares (D4, E4, D5, E5)
+            if (file >= 2 && file <= 5) {
+                bonus += 2; 
+            }
+
+            bonus += 10; // Bonus for each Pawn lever threat
+
+            // Check killer move
+            for (int ply = 0; ply < std::min(MAX_PLY, 10); ++ply) {
+                if (killerMoves[ply][0] == target || killerMoves[ply][1] == target) {
+                    bonus += 5;
+                    break;
+                }
+            }
+
+            // Check history move
+            int side = (color == White) ? 0 : 1;
+            if (historyTable[side][board.KingSQ(color)][target] > 0) {
+                bonus += 5;
+            }
+
+            // Calculate point follow MVV-LVA
+            Piece victim = board.pieceAtB(target);
+            if (victim != None && victim != PAWN) {
+                bonus += mvv_lva[PAWN][victim];
+            }
+        }
+    }
+
+    return bonus;
+}
+
+int evaluateFileOpenness(const Board &board, Color color) {
+    int bonus = 0;
+
+    for (int file = 0; file < 8; ++file) {
+        Bitboard fileMask = MASK_FILE[file];
+        Bitboard pawnsInFile = board.pieces(PAWN, color) & fileMask;
+        Bitboard enemyPawnsInFile = board.pieces(PAWN, ~color) & fileMask;
+
+        // Get all rooks and queens in the file
+        Bitboard rooks = board.pieces(ROOK, color) & fileMask;
+        Bitboard queens = board.pieces(QUEEN, color) & fileMask;
+
+        // Check OpenFile
+        if (!pawnsInFile && !enemyPawnsInFile) {
+            bonus += 10; 
+
+            // Bonus if rooks or queens are on the open file
+            if (rooks || queens) {
+                bonus += 10;
+            }
+
+            // Bonus if the open file is a central file (d or e)
+            if (file == 3 || file == 4) {
+                bonus += 5;
+            }
+
+            // Check intrude if the file is open
+            if ((rooks | queens) && color == White && (MASK_RANK[6] & fileMask || MASK_RANK[7] & fileMask)) {
+                bonus += 15; // Bonus if the open file leads to rank 7 or 8
+            } else if ((rooks | queens) && color == Black && (MASK_RANK[1] & fileMask || MASK_RANK[0] & fileMask)) {
+                bonus += 15; // Bonus if the open file leads to rank 2 or 1
+            }
+        }
+        // Check semi-OpenFile
+        else if (!pawnsInFile || !enemyPawnsInFile) {
+            bonus += 5; 
+
+            // Bonus if rooks or queens are on the semi-open file
+            if (rooks || queens) {
+                bonus += 5;
+            }
+
+            // Bonus if the semi-open file is a central file (d or e)
+            if (file == 3 || file == 4) {
+                bonus += 3;
+            }
+        }
+
+        // Penalty for blocked pawns in the file
+        if (pawnsInFile && !(rooks || queens)) {
+            bonus -= 5;
+        }
+    }
+
+    return bonus;
+}
+
+int evaluateSpaceAdvantage(const Board &board, Color color) {
+    int bonus = 0;
+
+    // Identify the opponent's half of the board
+    Bitboard opponentHalf = (color == White) ? MASK_RANK[4] | MASK_RANK[5] | MASK_RANK[6] | MASK_RANK[7]
+                                             : MASK_RANK[0] | MASK_RANK[1] | MASK_RANK[2] | MASK_RANK[3];
+
+    // Identify the center squares (D4, E4, D5, E5)
+    Bitboard centerSquares = (1ULL << SQ_D4) | (1ULL << SQ_D5) | (1ULL << SQ_E4) | (1ULL << SQ_E5);
+
+    // Calculate all pieces on the board
+    Bitboard allPieces = 0ULL;
+    for (int sq = 0; sq < 64; ++sq) {
+        if (board.pieceAtB(static_cast<Square>(sq)) != None) {
+            allPieces |= (1ULL << sq);
+        }
+    }
+    Bitboard empty = ~allPieces;
+
+    // Calculate controlled squares by pawns
+    Bitboard controlledSquares = 0ULL;
+    for (int sq = 0; sq < 64; ++sq) {
+        Square square = static_cast<Square>(sq);
+        if (board.pieceAtB(square) == makePiece(PAWN, color)) {
+            controlledSquares |= PawnAttacks(square, color);
+        }
+    }
+
+    // Calculate the number of squares controlled by pawns in the opponent's half
+    bonus += 2 * popcount(controlledSquares & opponentHalf & empty);
+
+    // Calculate the number of squares controlled by pawns in the center
+    bonus += 3 * popcount(controlledSquares & centerSquares);
+
+    // Integrated killerMoves
+    for (int ply = 0; ply < MAX_PLY; ++ply) {
+        if (killerMoves[ply][0] & controlledSquares || killerMoves[ply][1] & controlledSquares) {
+            bonus += 5; 
+            break;
+        }
+    }
+
+    // Integrated historyTable
+    int side = (color == White) ? 0 : 1;
+    for (int sq = 0; sq < 64; ++sq) {
+        if (controlledSquares & (1ULL << sq) && historyTable[side][board.KingSQ(color)][sq] > 0) {
+            bonus += 3; 
+        }
+    }
+
+    // Integrated MVV-LVA
+    for (int sq = 0; sq < 64; ++sq) {
+        if (controlledSquares & (1ULL << sq)) {
+            Piece victim = board.pieceAtB(static_cast<Square>(sq));
+            if (victim != None && victim != PAWN) {
+                bonus += mvv_lva[PAWN][victim];
+            }
+        }
+    }
+
+    return bonus;
+}
+
+int evaluatePawnMajority(const Board &board, Color color) {
+    int bonus = 0;
+
+    // Identify the pawns in king side and queen side
+    Bitboard pawns = board.pieces(PAWN, color);
+    Bitboard kingSide = MASK_FILE[5] | MASK_FILE[6] | MASK_FILE[7]; // Cột f, g, h
+    Bitboard queenSide = MASK_FILE[0] | MASK_FILE[1] | MASK_FILE[2]; // Cột a, b, c
+
+    int kingSidePawns = popcount(pawns & kingSide);
+    int queenSidePawns = popcount(pawns & queenSide);
+
+    // Calculate the majority of pawns
+    if (kingSidePawns > queenSidePawns) {
+        bonus += 10; // king side majority
+    } else if (queenSidePawns > kingSidePawns) {
+        bonus += 10; // queen side majority
+    }
+
+    // Bonus for having pawns on the 4th rank or higher
+    while (pawns) {
+        Square sq = static_cast<Square>(pop_lsb(pawns));
+        int rank = square_rank(sq);
+
+        int advancement = (color == White) ? rank : (7 - rank);
+        bonus += advancement * 2;
+
+        // Penalty for pawns on the 2nd rank or lower
+        Square frontSquare = (color == White) ? static_cast<Square>(sq + 8) : static_cast<Square>(sq - 8);
+        if (board.pieceAtB(frontSquare) != None) {
+            bonus -= 5; // Phạt nếu quân tốt bị cản trở
+        }
+    }
+
+    // Integrate killerMoves
+    for (int ply = 0; ply < MAX_PLY; ++ply) {
+        if (killerMoves[ply][0] & pawns || killerMoves[ply][1] & pawns) {
+            bonus += 5; 
+            break;
+        }
+    }
+
+    // Integrate historyTable
+    int side = (color == White) ? 0 : 1;
+    for (int sq = 0; sq < 64; ++sq) {
+        if (pawns & (1ULL << sq) && historyTable[side][board.KingSQ(color)][sq] > 0) {
+            bonus += 3; 
+        }
+    }
+
+    return bonus;
+}
+
+int evaluatePawnStorm(const Board &board, Color color) {
+    int bonus = 0;
+
+    // Identify the opponent's king square
+    Square enemyKingSquare = board.KingSQ(~color);
+    int enemyKingFile = square_file(enemyKingSquare);
+
+    // Identify the pawns of the current color
+    Bitboard pawns = board.pieces(PAWN, color);
+
+    // Calculate the small distance of each pawn to the opponent's king
+    while (pawns) {
+        Square sq = static_cast<Square>(pop_lsb(pawns));
+        int distance = square_distance(sq, enemyKingSquare);
+        int pawnFile = square_file(sq);
+
+        // Bonus for being close to the opponent's king
+        if (distance <= 2) {
+            bonus += 10; 
+        } else if (distance <= 4) {
+            bonus += 5; // smaller than the average distance
+        }
+
+        // Bonus for the pawn on the same file as the opponent's king
+        if ((pawnFile >= 4 && enemyKingFile >= 4) || (pawnFile <= 3 && enemyKingFile <= 3)) {
+            bonus += 3; 
+        }
+
+        // Penalty for the blocked pawns
+        Square frontSquare = (color == White) ? static_cast<Square>(sq + 8) : static_cast<Square>(sq - 8);
+        if (board.pieceAtB(frontSquare) != None) {
+            bonus -= 5; 
+        }
+    }
+
+    // Integrate killerMoves
+    for (int ply = 0; ply < MAX_PLY; ++ply) {
+        if (killerMoves[ply][0] & pawns || killerMoves[ply][1] & pawns) {
+            bonus += 5; 
+            break;
+        }
+    }
+
+    // Integrate historyTable
+    int side = (color == White) ? 0 : 1;
+    for (int sq = 0; sq < 64; ++sq) {
+        if (pawns & (1ULL << sq) && historyTable[side][board.KingSQ(color)][sq] > 0) {
+            bonus += 3;
+        }
+    }
+
+    return bonus;
+}
+
+int evaluateMobility(const Board &board, Color color) {
+    int mobility = 0;
+
+    // Knights
+    Bitboard knights = board.pieces(KNIGHT, color);
+    while (knights) {
+        Square sq = poplsb(knights);
+        U64 attacks = KnightAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 3;                 // Weight: 3
+        mobility += popcount(attacks & board.Enemy(color)) * 2; // Bonus for attacking enemy pieces
+    }
+
+    // Bishops
+    Bitboard bishops = board.pieces(BISHOP, color);
+    while (bishops) {
+        Square sq = poplsb(bishops);
+        U64 attacks = BishopAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 3;                               // Weight: 3
+        mobility += popcount(attacks & board.Enemy(color)) * 2;          // Bonus for attacking enemy pieces
+    }
+
+    // Rooks
+    Bitboard rooks = board.pieces(ROOK, color);
+    while (rooks) {
+        Square sq = poplsb(rooks);
+        U64 attacks = RookAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 5;                             // Weight: 5
+        mobility += popcount(attacks & board.Enemy(color)) * 2;        // Bonus for attacking enemy pieces
+    }
+
+    // Queens
+    Bitboard queens = board.pieces(QUEEN, color);
+    while (queens) {
+        Square sq = poplsb(queens);
+        U64 attacks = QueenAttacks(sq, board.occAll) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 9;                              // Weight: 9
+        mobility += popcount(attacks & board.Enemy(color)) * 2;         // Bonus for attacking enemy pieces
+    }
+
+    // King
+    Bitboard king = board.pieces(KING, color);
+    if (king) {
+        Square sq = poplsb(king);
+        U64 attacks = KingAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
+        mobility += popcount(attacks) * 2;               // Weight: 2
+ 
+        // Penalize unsafe king moves (attacks on squares controlled by the enemy)
+        mobility -= popcount(attacks & board.Enemy(color)) * 3;
+    }
+
+    // Penalize blocked pieces (pieces with very low mobility)
+    if (mobility < 5) {
+        mobility -= 5; // Apply a penalty for very low mobility
+    }
+
+    // Scale mobility by game phase
+    float endgameWeight = getGamePhase(board); // 0.0 in opening, 1.0 in endgame
+    float middlegameWeight = 1.0f - endgameWeight;
+
+    return static_cast<int>(mobility * middlegameWeight);
+}
+
+void updateMobility(Board &board, Move move, int &mobilityScore, Color color) {
+    Square fromS = from(move);
+    Square toS = to(move);
+    Piece movedPiece = board.pieceAtB(fromS);
+    Piece capturedPiece = board.pieceAtB(toS);
+
+    // Subtract mobility of the piece from its old square
+    mobilityScore -= popcount(board.attacksByPiece(type_of_piece(movedPiece), fromS, color) & ~board.Us(color));
+
+    // If a piece is captured, subtract its mobility
+    if (capturedPiece != None) {
+        mobilityScore -= popcount(board.attacksByPiece(type_of_piece(capturedPiece), toS, ~color) & ~board.Us(~color));
+    }
+
+    // Update the board state for the move
+    board.makeMove(move);
+
+    // Add mobility of the piece in its new square
+    mobilityScore += popcount(board.attacksByPiece(type_of_piece(movedPiece), toS, color) & ~board.Us(color));
+
+    // Restore the board state (if needed for further calculations)
+    board.unmakeMove(move);
+}

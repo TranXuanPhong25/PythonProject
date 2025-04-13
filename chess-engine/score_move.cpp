@@ -1,5 +1,4 @@
 #include "score_move.hpp"
-#include "search.hpp"
 
 Move killerMoves[MAX_PLY][2] = {{NO_MOVE}};
 int historyTable[2][64][64] = {{{0}}};
@@ -107,6 +106,8 @@ void clearHistory()
 
 void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
 {
+    int mobilityScore = evaluateMobility(board, board.sideToMove);
+
     // Get the current position's last move for countermove lookup
     Move lastMove = getLastMove();
     Move counterMove = NO_MOVE;
@@ -187,7 +188,15 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             int side = board.sideToMove == White ? 0 : 1;
             score = historyTable[side][from(move)][to(move)];
         }
-        
+
+        // Temporarily update mobility for this move
+        updateMobility(board, move, mobilityScore, board.sideToMove);
+ 
+        // Add mobility score to the move's score
+        score += mobilityScore;
+
+        // Restore the board state (handled by updateMobility)
+
         moves[i].value = score;
     }
 }
