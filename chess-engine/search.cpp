@@ -310,10 +310,20 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   // Stockfish's probabilistic cutoff technique
+   // Stockfish's probabilistic cutoff technique ===== probcut
    if (!is_pvnode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
    {
-      int rbeta = std::min(beta + 100, static_cast<int>(INF_BOUND));
+      int margin;
+      if (std::abs(staticEval) < 150)
+      {
+         margin = 80; // Smaller margin in balanced positions
+      }
+      else
+      {
+         margin = 100 + std::min(30, std::abs(staticEval) / 10);
+      }
+
+      int rbeta = std::min(beta + margin, static_cast<int>(INF_BOUND));
       int rdepth = depth - 4;
 
       // Try captures that might exceed beta with high probability
@@ -344,7 +354,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    bool futilityPruning = false;
    if (!is_pvnode && !inCheck && depth <= 3)
    {
-      int futilityMargin = 90 * depth;
+      int futilityMargin = 70 * depth;
       futilityPruning = (staticEval + futilityMargin <= alpha);
    }
 
@@ -394,6 +404,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    uint8_t nodeFlag = HFALPHA;
    int movesSearched = 0;
 
+   // Add this before the move loop
+   const int LateMovePruningCounts[9] = {0, 8, 12, 22, 36, 56, 96, 160, 256};
+   int moveCountThreshold = depth <= 8 ? LateMovePruningCounts[depth] : 256;
+
    for (int i = 0; i < moves.size; i++)
    {
       Move move = moves[i].move;
@@ -408,6 +422,12 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
       if (futilityPruning && i > 0 && !isCapture && !isPromotion)
          continue; // Skip this quiet move
+
+      if (!isRoot && !inCheck && !isCapture && !isPromotion && !inCheck && 
+          i >= moveCountThreshold && depth <= 8)
+      {
+          continue;  // Skip this quiet move - too late in the list
+      }
 
       board.makeMove(move);
       movesSearched++;
