@@ -13,4 +13,5 @@ int evaluatePhalanxPawns(const Board &board, Color color);
 int evaluatePassedPawnSupport(const Board &board, Color color);
 int evaluateBlockedPawns(const Board &board, Color color);
 int evaluatePawnChains(const Board &board, Color color);
-int evaluateConnectedPawns(const Board &board, Color color);
+int evaluateConnectedPawns(const Board &board, Color color);int evaluateMobility(const Board &board, Color color);
+void updateMobility(Board &board, Move move, int &mobilityScore, Color color);

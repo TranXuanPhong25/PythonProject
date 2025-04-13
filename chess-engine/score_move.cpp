@@ -1,4 +1,6 @@
 #include "score_move.hpp"
+#include "evaluate.hpp"
+#include "evaluate_features.hpp"
 Move killerMoves[MAX_PLY][2] = {{NO_MOVE}};
 int historyTable[2][64][64] = {{{0}}};
 
@@ -57,6 +59,8 @@ void clearHistory() {
 
 void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
 {
+    int mobilityScore = evaluateMobility(board, board.sideToMove);
+
     for (int i = 0; i < moves.size; ++i)
     {
         Move move = moves[i].move;
@@ -101,6 +105,14 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove,int ply)
             int side = board.sideToMove == White ? 0 : 1;
             score = historyTable[side][from(move)][to(move)];
         }
+
+        // Temporarily update mobility for this move
+        updateMobility(board, move, mobilityScore, board.sideToMove);
+ 
+        // Add mobility score to the move's score
+        score += mobilityScore;
+
+        // Restore the board state (handled by updateMobility)
 
         moves[i].value = score;
     }
