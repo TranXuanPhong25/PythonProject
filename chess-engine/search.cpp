@@ -129,7 +129,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    bool ttHit = false;
    bool is_pvnode = (beta - alpha) > 1;
-
+   bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
    if (!is_pvnode && ttHit)
@@ -155,9 +155,50 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    ScoreMovesForQS(board, captures, tte.move);
    std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
 
+   // Approximate piece values for delta pruning
+   const int QUEEN_VALUE = 900;
+   const int ROOK_VALUE = 500;
+   const int BISHOP_VALUE = 330;
+   const int KNIGHT_VALUE = 320;
+   const int PAWN_VALUE = 100;
+   
+   // Delta pruning margin - can be tuned
+   const int DELTA_MARGIN = 200;
+
    for (int i = 0; i < captures.size; i++)
    {
       Move move = captures[i].move;
+
+      // Apply delta pruning - skip captures that can't improve alpha
+      if (!is_pvnode && !inCheck)
+      {
+         // Get the captured piece
+         Piece capturedPiece = board.pieceAtB(to(move));
+         
+         // Calculate maximum possible material gain
+         int captureValue = 0;
+         
+         // Convert piece to its value
+         switch (capturedPiece % 6) {
+             case QUEEN:  captureValue = QUEEN_VALUE;  break;
+             case ROOK:   captureValue = ROOK_VALUE;   break;
+             case BISHOP: captureValue = BISHOP_VALUE; break;
+             case KNIGHT: captureValue = KNIGHT_VALUE; break;
+             case PAWN:   captureValue = PAWN_VALUE;   break;
+             default:     captureValue = 0;            break;
+         }
+         
+         // Add promotion value if move is a promotion
+         if (promoted(move)) {
+             // Assume promotion to queen (best case)
+             captureValue += (QUEEN_VALUE - PAWN_VALUE);
+         }
+         
+         // Skip this capture if even with the maximum possible gain it can't improve alpha
+         if (standPat + captureValue + DELTA_MARGIN <= alpha) {
+             continue;
+         }
+      }
 
       if (!see(board, move, -65))
       {
@@ -193,6 +234,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    return bestValue;
 }
+
 // Minimax search with alpha-beta pruning
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
