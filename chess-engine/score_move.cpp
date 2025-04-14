@@ -112,14 +112,6 @@ bool moveResolvesCheck(Board &board, Move move)
     return resolvesCheck;
 }
 
-bool moveResolvesCheck(Board &board, Move move)
-{
-    board.makeMove(move);
-    bool resolvesCheck = !board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
-    board.unmakeMove(move);
-    return resolvesCheck;
-}
-
 // Score a single move - used for individual move scoring
 int scoreSingleMove(Board &board, Move move, Move ttMove, int ply)
 {
