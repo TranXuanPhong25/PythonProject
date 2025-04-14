@@ -1,8 +1,5 @@
 #include "evaluate_features.hpp"
-#include "evaluate.hpp" 
-#include "score_move.hpp"
-#include "chess.hpp"
-#include <vector>
+
 using namespace Chess;
 
 
@@ -414,57 +411,52 @@ int evaluateBackwardPawns(const Board &board, Color color) {
 
 int evaluateHolesAndOutposts(const Board &board, Color color) {
     int bonus = 0;
-
-    //Get empty squares and enemy pawns
+    Color opponent = ~color;
+    
+    // Get important bitboards
+    Bitboard ourPawns = board.pieces(PAWN, color);
+    Bitboard enemyPawns = board.pieces(PAWN, opponent);
+    Bitboard ourKnights = board.pieces(KNIGHT, color);
+    Bitboard ourBishops = board.pieces(BISHOP, color);
+    Bitboard ourRooks = board.pieces(ROOK, color);
     Bitboard allPieces = board.All();
     Bitboard emptySquares = ~allPieces;
-    Bitboard enemyPawns = board.pieces(PAWN, ~color);
 
-    int side = (color == White) ? 0 : 1;
-    Square kingSq = board.KingSQ(color);
-    Square enemyKingSq = board.KingSQ(~color);
+    // Duyệt qua từng ô trên bàn cờ
+    for (int sq = 0; sq < 64; ++sq) {
+        if (!(emptySquares & (1ULL << sq))) continue;
 
-    // Iterate through all empty squares
-    Bitboard candidates = emptySquares;
-    while (candidates) {
-        Square sq = static_cast<Square>(pop_lsb(candidates));
+        Square square = static_cast<Square>(sq);
+        int rank = square_rank(square);
+        int file = square_file(square);
 
-        // continue if the square is attacked by enemy pawns
-        if (PawnAttacks(sq, ~color) & enemyPawns) continue;
-
-        bonus += 5;
-
-        // Central squares bonus file 2-5 and rank 2-5
-        int rank = square_rank(sq);
-        int file = square_file(sq);
-        if (rank >= 2 && rank <= 5 && file >= 2 && file <= 5) {
+        // Nếu ô không bị kiểm soát bởi tốt đối phương => đây có thể là một tiền đồn
+        if (!(PawnAttacks(square, ~color) & board.pieces(PAWN, ~color))) {
             bonus += 5;
-        }
 
-        // Bonus for being close to the enemy king
-        int distanceToEnemyKing = std::max(std::abs(square_rank(sq) - square_rank(enemyKingSq)),
-                                           std::abs(square_file(sq) - square_file(enemyKingSq)));
-        if (distanceToEnemyKing <= 2) {
-            bonus += 10;
-        }
-
-        // Killer move
-        for (int ply = 0; ply < std::min(MAX_PLY, 10); ++ply) {
-            if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
-                bonus += 10;
-                break;
+            // Nếu ô nằm ở trung tâm (16 ô trung tâm)
+            if (rank >= 2 && rank <= 5 && file >= 2 && file <= 5) {
+                bonus += 5;
             }
-        }
-        
-        // History table
-        if (historyTable[side][kingSq][sq] > 0) {
-            bonus += 10;
+
+            // Kiểm tra nếu ô này liên quan đến một killer move
+            for (int ply = 0; ply < MAX_PLY; ++ply) {
+                if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
+                    bonus += 10;
+                    break;
+                }
+            }
+
+            // Kiểm tra nếu ô này liên quan đến một nước đi tốt trong lịch sử
+            int side = (color == White) ? 0 : 1;
+            if (historyTable[side][board.KingSQ(color)][sq] > 0) {
+                bonus += 10;
+            }
         }
     }
 
     return bonus;
 }
-
 
 int evaluatePawnLeverThreats(const Board &board, Color color) {
     int bonus = 0;
@@ -798,16 +790,16 @@ int evaluateMobility(const Board &board, Color color) {
         mobility += popcount(attacks & board.Enemy(color)) * 2;         // Bonus for attacking enemy pieces
     }
 
-    // King
-    Bitboard king = board.pieces(KING, color);
-    if (king) {
-        Square sq = poplsb(king);
-        U64 attacks = KingAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
-        mobility += popcount(attacks) * 2;               // Weight: 2
+    // // King
+    // Bitboard king = board.pieces(KING, color);
+    // if (king) {
+    //     Square sq = poplsb(king);
+    //     U64 attacks = KingAttacks(sq) & ~board.Us(color); // Exclude friendly pieces
+    //     mobility += popcount(attacks) * 2;               // Weight: 2
  
-        // Penalize unsafe king moves (attacks on squares controlled by the enemy)
-        mobility -= popcount(attacks & board.Enemy(color)) * 3;
-    }
+    //     // Penalize unsafe king moves (attacks on squares controlled by the enemy)
+    //     mobility -= popcount(attacks & board.Enemy(color)) * 3;
+    // }
 
     // Penalize blocked pieces (pieces with very low mobility)
     if (mobility < 5) {
@@ -843,4 +835,57 @@ void updateMobility(Board &board, Move move, int &mobilityScore, Color color) {
 
     // Restore the board state (if needed for further calculations)
     board.unmakeMove(move);
+}
+
+int evaluateKingSafety(const Board &board, Color color) {
+    // Create a mutable copy of the board
+    Board mutableBoard = board;
+
+    Square kingSquare = mutableBoard.KingSQ(color);
+    U64 kingZone = KingAttacks(kingSquare) | (1ULL << kingSquare); // King zone includes the king's square
+
+    // Use the mutable copy to call attackersForSide
+    U64 enemyAttacks = mutableBoard.attackersForSide(~color, kingSquare, mutableBoard.occAll);
+
+    int penalty = popcount(kingZone & enemyAttacks) * 10; // Penalty for each attacked square
+    return -penalty;
+}
+
+int evaluateKingMobility(const Board &board, Color color) {
+    float endgameWeight = getGamePhase(board); // 0.0 in opening, 1.0 in endgame
+    float middlegameWeight = 1.0f - endgameWeight;
+    
+    // Get the king's square
+    Square kingSquare = board.KingSQ(color);
+
+    // Calculate the legal moves for the king
+    U64 kingMoves = KingAttacks(kingSquare) & ~board.Us(color); // Exclude friendly pieces
+
+    // Reward for each legal move
+    int mobilityScore = popcount(kingMoves) * 5 * endgameWeight; // Reward mobility in the endgame
+
+    // Penalize unsafe king moves (squares attacked by enemy pieces)
+    U64 unsafeMoves = kingMoves & board.Enemy(color);
+    mobilityScore -= popcount(unsafeMoves) * 3 * middlegameWeight; // Penalize unsafe moves in the middlegame
+
+    return mobilityScore;
+}
+
+int evaluateKingOpenFiles(const Board &board, Color color) {
+    Square kingSquare = board.KingSQ(color);
+    int file = square_file(kingSquare);
+
+    // Check if there are pawns in the king's file
+    Bitboard pawnsInFile = board.pieces(PAWN, color) & MASK_FILE[file];
+    if (!pawnsInFile) {
+        return -20; // Penalty for king on an open file
+    }
+
+    // Check if there are enemy pawns in the king's file
+    Bitboard enemyPawnsInFile = board.pieces(PAWN, ~color) & MASK_FILE[file];
+    if (!enemyPawnsInFile) {
+        return -10; // Smaller penalty for king on a semi-open file
+    }
+
+    return 0; // No penalty if the file is not open or semi-open
 }

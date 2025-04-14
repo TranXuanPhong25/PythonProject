@@ -76,7 +76,7 @@ int main()
    TranspositionTable *table;
    auto ttable = std::make_unique<TranspositionTable>();
    table = ttable.get();
-   table->Initialize(128);
+   table->Initialize(512);
    int maxDepth = 13; // Default max depth for benchmarking
    Board board(DEFAULT_POS);
    for (int d = 1; d <= 8; d++) {
