@@ -204,6 +204,21 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             score = historyTable[side][from(move)][to(move)];
         }
 
+        // Check for moves that deliver checkmate
+        board.makeMove(move);
+        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(~board.sideToMove))) {
+            Movelist legalMoves;
+            if (board.sideToMove == White) {
+                Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
+            } else {
+                Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+            }
+            if (legalMoves.size == 0) {
+                score = ISMATE - ply; // High score for delivering checkmate
+            }
+        }
+        board.unmakeMove(move);
+
         // Temporarily update mobility for this move
         updateMobility(board, move, mobilityScore, board.sideToMove);
  
