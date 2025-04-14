@@ -1364,7 +1364,7 @@ static constexpr U64 castlingKey[16] = {0,
          return make(NONETYPE, NO_SQ, NO_SQ, false);
       }
    }
-
+   bool givesCheck(const Board& board,Move move);
 } // namespace Chess
 
 namespace Movegen
@@ -1997,4 +1997,3 @@ namespace Movegen
    }
 } // namespace Movegen
 
-bool givesCheck(const Board&board,Move move);
