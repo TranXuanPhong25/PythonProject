@@ -14,6 +14,40 @@ using namespace Chess;
 // Maximum size for move history stack
 constexpr int MAX_MOVE_HISTORY = 512;
 
+// Maximum search depth
+constexpr int MAX_SEARCH_DEPTH = 64;
+
+// Typedefs for history tables
+typedef int (*PieceToHistory)[64][12][64];
+template <typename T>
+struct CorrectionHistory
+{
+   T *operator[](Piece p) { return table[p]; }
+   T *operator[](Piece p) const { return table[p]; }
+   T table[12][64] = {};
+};
+
+// PieceTo is a 64-entry array used in continuation history
+typedef int PieceTo[64];
+
+// Search stack structure for maintaining state during search
+struct Stack
+{
+   Move *pv;
+   int ply;
+   Move currentMove;
+   Move excludedMove;
+   int staticEval;
+   int statScore;
+   int moveCount;
+   bool inCheck;
+   bool ttPv;
+   bool ttHit;
+   int cutoffCnt;
+   int reduction;
+   bool isTTMove;
+};
+
 // Node counting statistics
 struct SearchStats
 {
@@ -61,14 +95,14 @@ struct SearchStats
 };
 
 // Move history entry for keeping track of previous moves
-struct MoveHistoryEntry {
-    Move move;
-    U64 hashKey;
+struct MoveHistoryEntry
+{
+   Move move;
+   U64 hashKey;
 
-    MoveHistoryEntry() : move(NO_MOVE), hashKey(0) {}
-    MoveHistoryEntry(Move m, U64 key) : move(m), hashKey(key) {}
+   MoveHistoryEntry() : move(NO_MOVE), hashKey(0) {}
+   MoveHistoryEntry(Move m, U64 key) : move(m), hashKey(key) {}
 };
-
 
 // Add move to move history
 void addMoveToHistory(Move move, U64 hashKey);
