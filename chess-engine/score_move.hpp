@@ -43,9 +43,6 @@ extern Move counterMoveTable[12][64];
 // This is indexed by [piece][to_square][piece][to_square]
 extern int continuationHistory[12][64][12][64];
 
-// Added butterfly history table for better context
-extern int butterflyHistory[2][64][64];
-
 // Killer move manipulation functions
 void addKillerMove(Move move, int ply);
 

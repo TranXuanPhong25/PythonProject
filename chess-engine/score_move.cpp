@@ -6,8 +6,6 @@ Move counterMoveTable[12][64] = {{NO_MOVE}};
 // Continuation history table for tracking move sequences
 // [fromPiece][fromSq][toPiece][toSq]
 int continuationHistory[12][64][12][64] = {{{{0}}}};
-// Butterfly history table
-int butterflyHistory[2][64][64] = {{{0}}};
 
 // Function to add a new killer move
 void addKillerMove(Move move, int ply)
@@ -40,21 +38,11 @@ void updateHistory(Board &board, Move move, int depth, bool isCutoff)
     historyTable[side][from_sq][to_sq] = 
         historyTable[side][from_sq][to_sq] * 32 / 33 + bonus;
     
-    // Update butterfly history too
-    butterflyHistory[side][from_sq][to_sq] =
-        butterflyHistory[side][from_sq][to_sq] * 32 / 33 + bonus;
-    
     // Clamp to prevent overflow
     if (historyTable[side][from_sq][to_sq] > 20000)
         historyTable[side][from_sq][to_sq] = 20000;
     if (historyTable[side][from_sq][to_sq] < -20000)
         historyTable[side][from_sq][to_sq] = -20000;
-        
-    // Clamp butterfly history too
-    if (butterflyHistory[side][from_sq][to_sq] > 20000)
-        butterflyHistory[side][from_sq][to_sq] = 20000;
-    if (butterflyHistory[side][from_sq][to_sq] < -20000)
-        butterflyHistory[side][from_sq][to_sq] = -20000;
 }
 
 // Update countermove history - store a move that was good against opponent's last move
@@ -81,7 +69,6 @@ void clearHistory()
             for (int k = 0; k < 64; k++)
             {
                 historyTable[i][j][k] = 0;
-                butterflyHistory[i][j][k] = 0;
             }
         }
     }
@@ -185,9 +172,6 @@ int scoreSingleMove(Board &board, Move move, Move ttMove, int ply)
         // Get history score
         int history_score = historyTable[side][from(move)][to(move)];
         
-        // Also consider butterfly history
-        int butterfly_score = butterflyHistory[side][from(move)][to(move)];
-        
         // Get continuation history score
         int continuation_score = 0;
         if (lastMove != NO_MOVE)
@@ -204,13 +188,13 @@ int scoreSingleMove(Board &board, Move move, Move ttMove, int ply)
         // Combine history scores with appropriate weights
         if (lastMove != NO_MOVE)
         {
-            // Weight regular history highest, then continuation, then butterfly
-            score += (history_score * 5 + continuation_score * 3 + butterfly_score * 2) / 10;
+            // Weight regular history highest, then continuation
+            score += (history_score * 5 + continuation_score * 3) / 8;
         }
         else
         {
-            // Without a last move, weight regular and butterfly history
-            score += (history_score * 3 + butterfly_score) / 4;
+            // Without a last move, weight regular history
+            score += history_score;
         }
     }
     
