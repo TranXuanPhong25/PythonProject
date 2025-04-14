@@ -283,7 +283,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
-
+   Move ttMove = ttHit ? tte.move : NO_MOVE;
    {
       PROFILE_SCOPE(ttLookup);
       profiler.ttLookups++;
@@ -319,11 +319,14 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
       profiler.movesGenerated += captures.size;
    }
 
-   // Time the move ordering
+   // Enhanced move ordering for quiescence search
    {
       PROFILE_SCOPE(moveOrdering);
+      // Stage 1: Score all moves
       ScoreMovesForQS(board, captures, tte.move);
-      std::sort(captures.begin(), captures.end(), std::greater<ExtMove>());
+      
+      // Stage 2: Sort all moves at once for better cache efficiency
+      std::stable_sort(captures.begin(), captures.end(), std::greater<ExtMove>());
    }
 
    // Delta pruning margin - can be tuned
@@ -472,7 +475,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    bool is_pvnode = (beta - alpha) > 1;
    int tt_score;
    Move ttMove = NO_MOVE;
-
+   
    {
       PROFILE_SCOPE(ttLookup);
       table->prefetch_tt(posKey);
@@ -510,7 +513,31 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    bool isRoot = (ply == 0);
    int staticEval;
    int eval = 0;
-
+    // Move generation with timing
+    Movelist moves;
+    {
+       PROFILE_SCOPE(moveGen);
+       profiler.moveGens++;
+ 
+       if (board.sideToMove == White)
+          Movegen::legalmoves<White, ALL>(board, moves);
+       else
+          Movegen::legalmoves<Black, ALL>(board, moves);
+ 
+       profiler.movesGenerated += moves.size;
+    }
+ 
+    // Terminal node check
+    if (static_cast<int>(moves.size) == 0)
+    {
+       int score = 0;
+       if (inCheck)
+          score = board.sideToMove == Black ? mated_in(ply) : mate_in(ply);
+       else
+          score = 0;
+       table->store(posKey, HFEXACT, NO_MOVE, depth, score, score);
+       return score;
+    }
    // Get evaluation with timing
    {
       PROFILE_SCOPE(evaluation);
@@ -673,8 +700,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       PROFILE_SCOPE(pruning);
       profiler.pruningAttempts++;
 
-      // ...existing ProbCut code...
-
       int margin;
       if (std::abs(staticEval) < 150)
       {
@@ -777,37 +802,13 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   // Move generation with timing
-   Movelist moves;
-   {
-      PROFILE_SCOPE(moveGen);
-      profiler.moveGens++;
-
-      if (board.sideToMove == White)
-         Movegen::legalmoves<White, ALL>(board, moves);
-      else
-         Movegen::legalmoves<Black, ALL>(board, moves);
-
-      profiler.movesGenerated += moves.size;
-   }
-
-   // Terminal node check
-   if (static_cast<int>(moves.size) == 0)
-   {
-      int score = 0;
-      if (inCheck)
-         score = board.sideToMove == White ? mated_in(ply) : mate_in(-ply);
-      else
-         score = 0;
-      table->store(posKey, HFEXACT, NO_MOVE, depth, score, score);
-      return score;
-   }
+  
 
    // Move ordering with timing
    {
       PROFILE_SCOPE(moveOrdering);
       scoreMoves(moves, board, ttMove, ply);
-      std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+      std::stable_sort(moves.begin(), moves.end(), std::greater<ExtMove>());
    }
 
    // Search variables
@@ -1105,7 +1106,7 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
 
    // Score and sort moves - put TT move first
    scoreMoves(moves, board, ttMove, 0);
-   std::sort(moves.begin(), moves.end(), std::greater<ExtMove>());
+   std::stable_sort(moves.begin(), moves.end(), std::greater<ExtMove>());
 
    for (int i = 0; i < moves.size; i++)
    {
@@ -1153,7 +1154,7 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
    searchStats.clear();
    profiler.reset();   // Reset profiling data
    clearMoveHistory(); // Clear the move history at the start of a new search
-
+   table->nextAge();
    auto startTime = std::chrono::high_resolution_clock::now();
 
    Move bestMove = NO_MOVE;
