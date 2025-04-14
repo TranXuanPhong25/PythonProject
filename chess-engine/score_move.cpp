@@ -146,11 +146,9 @@ int scoreSingleMove(Board &board, Move move, Move ttMove, int ply)
             score += mvv_lva[attacker][victim];
             
             // Check if this is a good capture with SEE
-            int seeScore = see(board, move, -100);
-            if (seeScore > 0)
+            bool isGoodCapture = see(board, move, -100);
+            if (isGoodCapture)
                 score += GoodCaptureScore;
-            else if (seeScore == 0)
-                score += EqualCaptureScore;
             else
                 score += BadCaptureScore;
         }
@@ -298,16 +296,11 @@ void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
                 score += mvv_lva[attacker][victim];
                 
                 // Add SEE score for better ordering
-                int seeScore = see(board, move, -65);
-                if (seeScore > 0)
+                bool isGoodCapture = see(board, move, -65);
+                if (isGoodCapture)
                 {
                     // Good capture
-                    score += GoodCaptureScore + seeScore;
-                }
-                else if (seeScore == 0)
-                {
-                    // Equal exchange
-                    score += EqualCaptureScore;
+                    score += GoodCaptureScore;
                 }
                 else
                 {
@@ -403,7 +396,7 @@ Move StagedMoveGenerator::nextMove()
             Piece victim = board.pieceAtB(to(move));
             
             // Process captures with positive SEE
-            if (victim != None && see(board, move, -100) >= 0)
+            if (victim != None && see(board, move, -100))
             {
                 return move;
             }
@@ -528,7 +521,7 @@ Move StagedMoveGenerator::nextMove()
             Piece victim = board.pieceAtB(to(move));
             
             // Process captures with negative SEE
-            if (victim != None && see(board, move, -100) < 0)
+            if (victim != None && !see(board, move, -100))
             {
                 return move;
             }
