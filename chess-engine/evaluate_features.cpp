@@ -420,237 +420,44 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
     Bitboard ourBishops = board.pieces(BISHOP, color);
     Bitboard ourRooks = board.pieces(ROOK, color);
     Bitboard allPieces = board.All();
-    
-    // Calculate squares not attacked by enemy pawns (potential outposts)
-    Bitboard enemyPawnAttacks = 0;
-    Bitboard tempPawns = enemyPawns;
-    while (tempPawns) {
-        Square sq = static_cast<Square>(pop_lsb(tempPawns));
-        enemyPawnAttacks |= PawnAttacks(sq, opponent);
-    }
-    
-    Bitboard potentialOutposts = ~enemyPawnAttacks & ~allPieces;
-    
-    // Calculate pawn-supported squares
-    Bitboard supportedSquares = 0;
-    tempPawns = ourPawns;
-    while (tempPawns) {
-        Square sq = static_cast<Square>(pop_lsb(tempPawns));
-        supportedSquares |= PawnAttacks(sq, color);
-    }
-    
-    // Strong outposts: squares not attacked by enemy pawns AND supported by our pawns
-    Bitboard strongOutposts = potentialOutposts & supportedSquares;
-    
-    // Value for different regions of the board
-    const int centerValue = 10;       // d4, e4, d5, e5
-    const int extendedCenterValue = 7; // c3-f6 area excluding center
-    const int thirdRankValue = 5;      // 3rd rank for white, 6th for black
-    const int fourthRankValue = 8;     // 4th rank for white, 5th for black
-    const int fifthRankValue = 12;     // 5th rank for white, 4th for black
-    const int sixthRankValue = 15;     // 6th rank for white, 3rd for black
-    
-    // Get enemy king position for proximity bonus
-    Square enemyKing = board.KingSQ(opponent);
-    
-    // Check actual piece placement on outposts
-    Bitboard outpostKnights = ourKnights & strongOutposts;
-    Bitboard outpostBishops = ourBishops & strongOutposts;
-    Bitboard outpostRooks = ourRooks & strongOutposts;
-    
-    // Process knight outposts (most valuable)
-    while (outpostKnights) {
-        Square sq = static_cast<Square>(pop_lsb(outpostKnights));
-        int rank = square_rank(sq);
-        int file = square_file(sq);
-        int distance = square_distance(sq, enemyKing);
-        
-        // Base value for knight outpost
-        int outpostValue = 18;
-        
-        // Adjust value based on rank (higher ranks worth more)
-        rank = (color == White) ? rank : 7 - rank;
-        if (rank == 3) outpostValue += thirdRankValue;
-        else if (rank == 4) outpostValue += fourthRankValue;
-        else if (rank == 5) outpostValue += fifthRankValue;
-        else if (rank == 6) outpostValue += sixthRankValue;
-        
-        // Central outposts are more valuable
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            // Real center
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                outpostValue += centerValue;
-            } else {
-                outpostValue += extendedCenterValue;
+    Bitboard emptySquares = ~allPieces;
+
+    // Duyệt qua từng ô trên bàn cờ
+    for (int sq = 0; sq < 64; ++sq) {
+        if (!(emptySquares & (1ULL << sq))) continue;
+
+        Square square = static_cast<Square>(sq);
+        int rank = square_rank(square);
+        int file = square_file(square);
+
+        // Nếu ô không bị kiểm soát bởi tốt đối phương => đây có thể là một tiền đồn
+        if (!(PawnAttacks(square, ~color) & board.pieces(PAWN, ~color))) {
+            bonus += 5;
+
+            // Nếu ô nằm ở trung tâm (16 ô trung tâm)
+            if (rank >= 2 && rank <= 5 && file >= 2 && file <= 5) {
+                bonus += 5;
             }
-        }
-        
-        // Proximity to enemy king bonus
-        outpostValue += std::max(0, 7 - distance) * 3;
-        
-        // Consider piece activity from the outpost
-        Bitboard knightAttacks = KnightAttacks(sq);
-        int attackCount = popcount(knightAttacks & board.occEnemy);
-        outpostValue += attackCount * 6;
-        
-        // History heuristic integration
-        int side = (color == White) ? 0 : 1;
-        int historyScore = historyTable[side][board.KingSQ(color)][sq];
-        outpostValue += std::min(10, historyScore / 100);
-        
-        bonus += outpostValue;
-    }
-    
-    // Process bishop outposts (also valuable)
-    while (outpostBishops) {
-        Square sq = static_cast<Square>(pop_lsb(outpostBishops));
-        int rank = square_rank(sq);
-        int file = square_file(sq);
-        
-        // Base value for bishop outpost
-        int outpostValue = 15;
-        
-        // Adjust value based on rank
-        rank = (color == White) ? rank : 7 - rank;
-        if (rank == 3) outpostValue += thirdRankValue - 2;
-        else if (rank == 4) outpostValue += fourthRankValue - 2;
-        else if (rank == 5) outpostValue += fifthRankValue - 2;
-        else if (rank == 6) outpostValue += sixthRankValue - 2;
-        
-        // Central outposts bonus
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                outpostValue += centerValue - 2;
-            } else {
-                outpostValue += extendedCenterValue - 2;
-            }
-        }
-        
-        // Evaluate bishop's diagonal influence
-        Bitboard bishopAttacks = BishopAttacks(sq, allPieces);
-        int attackCount = popcount(bishopAttacks & board.occEnemy);
-        outpostValue += attackCount * 4;
-        
-        bonus += outpostValue;
-    }
-    
-    // Process rook outposts (less common but valuable on 7th rank)
-    while (outpostRooks) {
-        Square sq = static_cast<Square>(pop_lsb(outpostRooks));
-        int rank = (color == White) ? square_rank(sq) : 7 - square_rank(sq);
-        
-        // Rooks are especially strong on 7th rank
-        if (rank == 6) {
-            bonus += 25;
-            
-            // Extra bonus for rook attacking pawns on 7th
-            Bitboard rookAttacks = RookAttacks(sq, allPieces);
-            int pawnsAttacked = popcount(rookAttacks & board.pieces(PAWN, opponent));
-            bonus += pawnsAttacked * 8;
-        }
-        else {
-            bonus += 12;
-        }
-    }
-    
-    // Potential outposts (squares where we could place pieces)
-    Bitboard remainingOutposts = potentialOutposts & ~(outpostKnights | outpostBishops | outpostRooks);
-    
-    // Only consider strategically important potential outposts
-    remainingOutposts &= supportedSquares;
-    
-    // Process remaining potential outposts (value is less than occupied outposts)
-    while (remainingOutposts) {
-        Square sq = static_cast<Square>(pop_lsb(remainingOutposts));
-        int rank = square_rank(sq);
-        int file = square_file(sq);
-        
-        int outpostValue = 4; // Base value for potential outpost
-        
-        // Rank adjustments
-        rank = (color == White) ? rank : 7 - rank;
-        if (rank >= 4) {
-            outpostValue += (rank - 3) * 2;
-        }
-        
-        // Central squares bonus
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                outpostValue += 3;
-            } else {
-                outpostValue += 2;
-            }
-        }
-        
-        // Check if it's near enemy king for minor bonus
-        int distance = square_distance(sq, enemyKing);
-        if (distance <= 3) {
-            outpostValue += 2;
-        }
-        
-        // Integrate with killer moves for tactically important squares
-        for (int ply = 0; ply < std::min(MAX_PLY, 10); ++ply) {
-            if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
-                outpostValue += 3;
-                break;
-            }
-        }
-        
-        bonus += outpostValue;
-    }
-    
-    // Evaluate holes in our position (squares that cannot be defended by our pawns)
-    Bitboard ourPawnAttacks = 0;
-    tempPawns = ourPawns;
-    while (tempPawns) {
-        Square sq = static_cast<Square>(pop_lsb(tempPawns));
-        ourPawnAttacks |= PawnAttacks(sq, color);
-    }
-    
-    // Holes are squares on our half that can't be defended by pawns
-    Bitboard ourHalf = (color == White) ? 
-        (MASK_RANK[2] | MASK_RANK[3] | MASK_RANK[4]) :
-        (MASK_RANK[3] | MASK_RANK[4] | MASK_RANK[5]);
-    
-    Bitboard holes = ~ourPawnAttacks & ourHalf & ~allPieces;
-    
-    // Penalize holes that enemy minor pieces could use
-    Bitboard enemyKnights = board.pieces(KNIGHT, opponent);
-    Bitboard enemyBishops = board.pieces(BISHOP, opponent);
-    
-    // Calculate potential knight outposts for enemy
-    while (holes) {
-        Square sq = static_cast<Square>(pop_lsb(holes));
-        int rank = square_rank(sq);
-        int file = square_file(sq);
-        
-        // Only penalize strategically important holes
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            int holePenalty = 3;
-            
-            // Central holes are worse
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                holePenalty = 5;
-            }
-            
-            // Check if enemy knights can reach this hole
-            Bitboard enemyKnightMoves = 0;
-            Bitboard tempKnights = enemyKnights;
-            while (tempKnights) {
-                Square knightSq = static_cast<Square>(pop_lsb(tempKnights));
-                if (KnightAttacks(knightSq) & (1ULL << sq)) {
-                    holePenalty += 2;
+
+            // Kiểm tra nếu ô này liên quan đến một killer move
+            for (int ply = 0; ply < MAX_PLY; ++ply) {
+                if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
+                    bonus += 10;
                     break;
                 }
             }
-            
-            // Apply the penalty
-            bonus -= holePenalty;
+
+            // Kiểm tra nếu ô này liên quan đến một nước đi tốt trong lịch sử
+            int side = (color == White) ? 0 : 1;
+            if (historyTable[side][board.KingSQ(color)][sq] > 0) {
+                bonus += 10;
+            }
         }
     }
-    
+
     return bonus;
 }
+
 int evaluatePawnLeverThreats(const Board &board, Color color) {
     int bonus = 0;
 
@@ -1081,4 +888,238 @@ int evaluateKingOpenFiles(const Board &board, Color color) {
     }
 
     return 0; // No penalty if the file is not open or semi-open
+}
+
+int evaluateQueenControlAndCheckmatePotential(const Board &board, Color color) {
+    int score = 0;
+    Color opponent = ~color;
+    
+    Bitboard ourQueens = board.pieces(QUEEN, color);
+    if (!ourQueens) return 0; // Early exit if no queens
+    
+    Bitboard enemyKing = board.pieces(KING, opponent);
+    Square enemyKingSq = board.KingSQ(opponent);
+    
+    Board &mutableBoard = const_cast<Board &>(board);
+    
+    Bitboard allPieces = board.All();
+    Bitboard ourPieces = board.Us(color);
+    Bitboard enemyPieces = board.Enemy(color);
+    
+    // Calculate the king's attacks and zone
+    Bitboard kingAttacks = KingAttacks(enemyKingSq);
+    Bitboard kingZone = kingAttacks | (1ULL << enemyKingSq);
+    
+    // Store the center squares (D4, E4, D5, E5)
+    Bitboard centerSquares = (1ULL << SQ_D4) | (1ULL << SQ_E4) | (1ULL << SQ_D5) | (1ULL << SQ_E5);
+    
+    // Analyze each queen
+    while (ourQueens) {
+        Square queenSq = static_cast<Square>(pop_lsb(ourQueens));
+        
+        // 1. Queen's control over the board
+        Bitboard queenAttacks = QueenAttacks(queenSq, allPieces) & ~ourPieces;
+        
+        // 2-3. Queen's attack on enemy pieces
+        int attackBonus = 0;
+        attackBonus += popcount(queenAttacks & enemyPieces) * 5;          // Attack enemy pieces
+        attackBonus += popcount(queenAttacks & kingZone) * 10;            // Attack enemy king zone
+        attackBonus += ((queenAttacks & centerSquares) ? 15 : 0);         // Center control bonus
+        score += popcount(queenAttacks) * 2 + attackBonus;                // Basic attack bonus
+        
+        // 4. Analyze checkmate potential
+        int distance = square_distance(queenSq, enemyKingSq);
+        if (distance <= 2) {
+            score += (3 - distance) * 15; // Closer to the enemy king = more potential
+            
+            // Check if the queen attacks the enemy king
+            if (queenAttacks & enemyKing) {
+                score += 30;
+                
+                // Check if the enemy king has any legal moves
+                Bitboard kingMoves = kingAttacks & ~board.Us(opponent);
+                
+                // Check if the enemy king has any safe moves
+                Bitboard safeKingMoves = kingMoves;
+                Bitboard tempKingMoves = kingMoves;
+                
+                while (tempKingMoves) {
+                    Square kingMoveSq = static_cast<Square>(pop_lsb(tempKingMoves));
+                    
+                    // Check if the move is attacked by our pieces
+                    if (mutableBoard.attackersForSide(color, kingMoveSq, allPieces)) {
+                        safeKingMoves &= ~(1ULL << kingMoveSq);
+                    }
+                }
+                
+                // Check if the enemy king has no any safe moves
+                if (safeKingMoves == 0 && mutableBoard.attackersForSide(color, enemyKingSq, allPieces)) {
+                    score += 200; // Checkmate potential bonus
+                }
+            }
+        }
+        
+        // Priority for the queen's safety
+        if (!mutableBoard.attackersForSide(opponent, queenSq, allPieces)) {
+            score += 10;
+        }
+        
+        // Check killer moves + History heuristic
+        int side = (color == White) ? 0 : 1;
+        bool killerBonus = false;
+        
+        for (int ply = 0; ply < std::min(MAX_PLY, 10) && !killerBonus; ++ply) {
+            if (killerMoves[ply][0] == queenSq || killerMoves[ply][1] == queenSq) {
+                score += 8;
+                killerBonus = true;
+            }
+        }
+        
+        if (historyTable[side][board.KingSQ(color)][queenSq] > 0) {
+            score += 5;
+        }
+    }
+    
+    return score;
+}
+
+int evaluateCastlingAbility(const Board &board, Color color) {
+    int score = 0;
+    Color opponent = ~color;
+    
+    // Judge castling
+    unsigned castlingRights = board.castlingRights;
+    
+    // Identify the castling rights for the current color
+    bool hasKingsideCastling = false;
+    bool hasQueensideCastling = false;
+    
+    if (color == White) {
+        hasKingsideCastling = (castlingRights & 1); // WHITE_OO (0001)
+        hasQueensideCastling = (castlingRights & 2); // WHITE_OOO (0010)
+    } else {
+        hasKingsideCastling = (castlingRights & 4); // BLACK_OO (0100)
+        hasQueensideCastling = (castlingRights & 8); // BLACK_OOO (1000)
+    }
+    
+    // Bonus basic point for castling rights
+    if (hasKingsideCastling) score += 15;
+    if (hasQueensideCastling) score += 10;
+    
+    // Check if the king is already castled
+    Square kingPos = board.KingSQ(color);
+    int kingFile = square_file(kingPos);
+    int kingRank = square_rank(kingPos);
+    int expectedRank = (color == White) ? 0 : 7;
+    int castledBonus = 0;
+    
+    // Check if the king is castled
+    if (kingRank == expectedRank) {
+        if (kingFile == 6) {      // G-file (castled kingside)
+            castledBonus = 40;
+        } 
+        else if (kingFile == 2) { // C-file (castled queenside)
+            castledBonus = 35;
+        }
+    }
+    
+    // Check path for castling if not castled yet
+    if (castledBonus == 0 && (hasKingsideCastling || hasQueensideCastling)) {
+        
+        Board &mutableBoard = const_cast<Board &>(board);
+        Bitboard allPieces = board.All();
+        
+        // Store the squares for castling path
+        Square squareB = file_rank_square(File(FILE_B), Rank(expectedRank));
+        Square squareC = file_rank_square(File(FILE_C), Rank(expectedRank));
+        Square squareD = file_rank_square(File(FILE_D), Rank(expectedRank));
+        Square squareF = file_rank_square(File(FILE_F), Rank(expectedRank));
+        Square squareG = file_rank_square(File(FILE_G), Rank(expectedRank));
+        
+        // Check path for castling kingside
+        if (hasKingsideCastling) {
+            bool pathClear = (board.pieceAtB(squareF) == None) && (board.pieceAtB(squareG) == None);
+            
+            if (pathClear) {
+                // Combined check for squares F and G
+                // Check if the squares F and G are attacked by the opponent
+                bool pathUnderAttack = mutableBoard.attackersForSide(opponent, squareF, allPieces) || 
+                                      mutableBoard.attackersForSide(opponent, squareG, allPieces);
+                
+                if (!pathUnderAttack) {
+                    score += 20; // Safe path
+                } else {
+                    score -= 5;  // Path under attack
+                }
+            } else {
+                score -= 8; // Path blocked
+            }
+        }
+        
+        // Check path for castling queenside
+        if (hasQueensideCastling) {
+            bool pathClear = (board.pieceAtB(squareB) == None) && 
+                            (board.pieceAtB(squareC) == None) &&
+                            (board.pieceAtB(squareD) == None);
+            
+            if (pathClear) {
+                // Check if the squares B, C, and D are attacked by the opponent
+                bool pathUnderAttack = mutableBoard.attackersForSide(opponent, squareC, allPieces) || 
+                                      mutableBoard.attackersForSide(opponent, squareD, allPieces);
+                
+                if (!pathUnderAttack) {
+                    score += 15; // Safe path
+                } else {
+                    score -= 5;  // Path under attack
+                }
+            } else {
+                score -= 8; // Path blocked
+            }
+        }
+    }
+    
+    // Modify the score based on the game phase
+    float gamePhase = getGamePhase(board);
+    
+    if (gamePhase > 0.5) { // Endgame phase
+        castledBonus = static_cast<int>(castledBonus * (1.0 - gamePhase));
+    }
+    
+    score += castledBonus;
+    
+    // Analyze the advantage after castling
+    if (castledBonus > 0) {
+        Bitboard rooks = board.pieces(ROOK, color);
+        
+        // Check squares for castling path
+        if (kingFile == 6) {
+            // Check rook h has connection with the king
+            Square squareH = file_rank_square(File(FILE_H), Rank(expectedRank));
+            if (rooks & (1ULL << squareH)) {
+                score += 5;
+            }
+            
+            // Check rook of file pawns
+            Square squareE = file_rank_square(File(FILE_E), Rank(expectedRank));
+            Square squareF = file_rank_square(File(FILE_F), Rank(expectedRank));
+            if (rooks & ((1ULL << squareE) | (1ULL << squareF))) {
+                score += 15; // Rook on file pawns after castling
+            }
+        }
+        else if (kingFile == 2) { 
+            // Check rook a has connection with the king
+            Square squareA = file_rank_square(File(FILE_A), Rank(expectedRank));
+            if (rooks & (1ULL << squareA)) {
+                score += 5;
+            }
+            
+            // Check rook of file pawns
+            Square squareD = file_rank_square(File(FILE_D), Rank(expectedRank));
+            Square squareE = file_rank_square(File(FILE_E), Rank(expectedRank));
+            if (rooks & ((1ULL << squareD) | (1ULL << squareE))) {
+                score += 15; // Rook on file pawns after castling
+            }
+        }
+    }
+    return score;
 }
