@@ -415,45 +415,56 @@ int evaluateBackwardPawns(const Board &board, Color color) {
 int evaluateHolesAndOutposts(const Board &board, Color color) {
     int bonus = 0;
 
-    // Tính toán các ô trống bằng cách lấy tất cả các ô và loại bỏ các ô bị chiếm
+    //Get empty squares and enemy pawns
     Bitboard allPieces = board.All();
     Bitboard emptySquares = ~allPieces;
+    Bitboard enemyPawns = board.pieces(PAWN, ~color);
 
-    // Duyệt qua từng ô trên bàn cờ
-    for (int sq = 0; sq < 64; ++sq) {
-        if (!(emptySquares & (1ULL << sq))) continue;
+    int side = (color == White) ? 0 : 1;
+    Square kingSq = board.KingSQ(color);
+    Square enemyKingSq = board.KingSQ(~color);
 
-        Square square = static_cast<Square>(sq);
-        int rank = square_rank(square);
-        int file = square_file(square);
+    // Iterate through all empty squares
+    Bitboard candidates = emptySquares;
+    while (candidates) {
+        Square sq = static_cast<Square>(pop_lsb(candidates));
 
-        // Nếu ô không bị kiểm soát bởi tốt đối phương => đây có thể là một tiền đồn
-        if (!(PawnAttacks(square, ~color) & board.pieces(PAWN, ~color))) {
+        // continue if the square is attacked by enemy pawns
+        if (PawnAttacks(sq, ~color) & enemyPawns) continue;
+
+        bonus += 5;
+
+        // Central squares bonus file 2-5 and rank 2-5
+        int rank = square_rank(sq);
+        int file = square_file(sq);
+        if (rank >= 2 && rank <= 5 && file >= 2 && file <= 5) {
             bonus += 5;
+        }
 
-            // Nếu ô nằm ở trung tâm (16 ô trung tâm)
-            if (rank >= 2 && rank <= 5 && file >= 2 && file <= 5) {
-                bonus += 5;
-            }
+        // Bonus for being close to the enemy king
+        int distanceToEnemyKing = std::max(std::abs(square_rank(sq) - square_rank(enemyKingSq)),
+                                           std::abs(square_file(sq) - square_file(enemyKingSq)));
+        if (distanceToEnemyKing <= 2) {
+            bonus += 10;
+        }
 
-            // Kiểm tra nếu ô này liên quan đến một killer move
-            for (int ply = 0; ply < MAX_PLY; ++ply) {
-                if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
-                    bonus += 10;
-                    break;
-                }
-            }
-
-            // Kiểm tra nếu ô này liên quan đến một nước đi tốt trong lịch sử
-            int side = (color == White) ? 0 : 1;
-            if (historyTable[side][board.KingSQ(color)][sq] > 0) {
+        // Killer move
+        for (int ply = 0; ply < std::min(MAX_PLY, 10); ++ply) {
+            if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
                 bonus += 10;
+                break;
             }
+        }
+        
+        // History table
+        if (historyTable[side][kingSq][sq] > 0) {
+            bonus += 10;
         }
     }
 
     return bonus;
 }
+
 
 int evaluatePawnLeverThreats(const Board &board, Color color) {
     int bonus = 0;
