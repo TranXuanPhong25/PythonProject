@@ -283,12 +283,8 @@ bool ZugzwangDetector::hasMaterialZugzwangRisk(const Board& board) {
 
 bool ZugzwangDetector::hasLowPieceCount(const Board& board, Color c) {
     // Count non-king pieces for side
-    int pieceCount = 0;
-    pieceCount += popcount(board.pieces(PAWN, c));
-    pieceCount += popcount(board.pieces(KNIGHT, c));
-    pieceCount += popcount(board.pieces(BISHOP, c));
-    pieceCount += popcount(board.pieces(ROOK, c));
-    pieceCount += popcount(board.pieces(QUEEN, c));
+    // occUs already contains all pieces of the side, so subtract 1 for the king
+    int pieceCount = popcount(c == board.sideToMove ? board.occUs : board.occEnemy) - 1;
     
     // Low piece count is zugzwang-prone
     return pieceCount <= 2;

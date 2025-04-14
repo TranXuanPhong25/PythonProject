@@ -173,16 +173,9 @@ void updateContinuationHistory(Board &board, Move prevMove, Move currMove, int d
 
 int getPieceCounts(const Board &board, Color color)
 {
-   int count = 0;
-   count += popcount(board.pieces(PAWN, color));
-   count += popcount(board.pieces(KNIGHT, color));
-   count += popcount(board.pieces(BISHOP, color));
-   count += popcount(board.pieces(ROOK, color));
-   count += popcount(board.pieces(QUEEN, color));
-   count += popcount(board.pieces(KING, color));
-   return count;
+   return popcount(color == board.sideToMove ? board.occUs : board.occEnemy) - 1;
 }
-int score_to_tt(int score, int ply)
+inline int score_to_tt(int score, int ply)
 {
    if (score >= IS_MATE_IN_MAX_PLY)
    {
@@ -198,7 +191,7 @@ int score_to_tt(int score, int ply)
    return score;
 }
 
-int score_from_tt(int score, int ply)
+inline int score_from_tt(int score, int ply)
 {
    if (score >= IS_MATE_IN_MAX_PLY)
    {
