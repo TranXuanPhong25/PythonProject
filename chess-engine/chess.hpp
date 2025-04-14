@@ -17,11 +17,6 @@
 #include <intrin.h>
 #endif
 
-namespace NNUE
-{
-   struct Net;
-}
-
 using namespace Chess_Lookup::Fancy;
 
 namespace Chess
@@ -903,7 +898,6 @@ static constexpr U64 castlingKey[16] = {0,
 
       Square KingSQ(Color c) const;
 
-      void refresh(NNUE::Net &nnue);
 
       U64 Enemy(Color c) const;
       U64 EnemyEmpty(Color c) const;
@@ -1370,7 +1364,7 @@ static constexpr U64 castlingKey[16] = {0,
          return make(NONETYPE, NO_SQ, NO_SQ, false);
       }
    }
-
+   bool givesCheck(const Board& board,Move move);
 } // namespace Chess
 
 namespace Movegen
@@ -2002,3 +1996,4 @@ namespace Movegen
          legalmoves<Black, mt>(board, movelist);
    }
 } // namespace Movegen
+
