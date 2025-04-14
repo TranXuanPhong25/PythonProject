@@ -104,6 +104,14 @@ void clearHistory()
     }
 }
 
+bool moveResolvesCheck(Board &board, Move move)
+{
+    board.makeMove(move);
+    bool resolvesCheck = !board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+    board.unmakeMove(move);
+    return resolvesCheck;
+}
+
 void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
 {
     int mobilityScore = evaluateMobility(board, board.sideToMove);
@@ -128,6 +136,13 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
         int score = 0;
         Piece attacker = board.pieceAtB(from(move));
         Piece victim = board.pieceAtB(to(move));
+
+        // Prioritize moves that resolve checks
+        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove))) {
+            if (moveResolvesCheck(board, move)) {
+                score = 10000; // High priority for check-evasion moves
+            }
+        }
         
         // Prioritize TT move
         if (move == ttMove)
