@@ -104,6 +104,22 @@ void clearHistory()
     }
 }
 
+bool moveResolvesCheck(Board &board, Move move)
+{
+    board.makeMove(move);
+    bool resolvesCheck = !board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+    board.unmakeMove(move);
+    return resolvesCheck;
+}
+
+bool moveResolvesCheck(Board &board, Move move)
+{
+    board.makeMove(move);
+    bool resolvesCheck = !board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+    board.unmakeMove(move);
+    return resolvesCheck;
+}
+
 // Score a single move - used for individual move scoring
 int scoreSingleMove(Board &board, Move move, Move ttMove, int ply)
 {
@@ -119,7 +135,11 @@ int scoreSingleMove(Board &board, Move move, Move ttMove, int ply)
     
     // Base score
     int score = 0;
-    
+    if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove))) {
+        if (moveResolvesCheck(board, move)) {
+            score = 10000; // High priority for check-evasion moves
+        }
+    }
     // 1. Prioritize TT move with highest score
     if (move == ttMove)
         return PvMoveScore;
@@ -245,7 +265,19 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             // Add mobility score to the move's score
             score += mobilityScore;
         }
-        
+        board.makeMove(move);
+        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(~board.sideToMove))) {
+            Movelist legalMoves;
+            if (board.sideToMove == White) {
+                Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
+            } else {
+                Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+            }
+            if (legalMoves.size == 0) {
+                score = ISMATE - ply; // High score for delivering checkmate
+            }
+        }
+        board.unmakeMove(move);
         // Assign final score to the move
         moves[i].value = score;
     }

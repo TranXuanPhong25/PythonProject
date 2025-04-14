@@ -64,6 +64,7 @@ void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move);
 
 // Helper to pick the next best move from an already scored list
 void pickNextMove(const int& moveNum, Movelist &list);
+bool moveResolvesCheck(Board &board, Move move);
 
 // Update mobility score for a specific move
 void updateMobility(Board &board, Move move, int &mobilityScore, Color side);

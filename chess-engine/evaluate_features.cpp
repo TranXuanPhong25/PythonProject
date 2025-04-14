@@ -1152,6 +1152,43 @@ int evaluateKingSafety(const Board &board, Color color) {
     U64 enemyAttacks = mutableBoard.attackersForSide(~color, kingSquare, mutableBoard.occAll);
 
     int penalty = popcount(kingZone & enemyAttacks) * 10; // Penalty for each attacked square
+
+    // Check if the king is in check and has no legal moves (checkmate)
+    if (board.isSquareAttacked(color, kingSquare)) {
+        Movelist moves;
+        if (color == White) {
+            Movegen::legalmoves<White, Movetype::ALL>(mutableBoard, moves);
+        } else {
+            Movegen::legalmoves<Black, Movetype::ALL>(mutableBoard, moves);
+        }
+        if (moves.size == 0) {
+            penalty += 10000; // Severe penalty for checkmate
+        } else {
+            penalty += 50; // Penalty for being in check
+        }
+    }
+
+    // Additional penalty for double checks
+    if (board.doubleCheck == 2) {
+        penalty += 100; // Severe penalty for double check
+    }
+
+    // Check if our pieces are checking the opponent's king (delivering checkmate)
+    Square opponentKingSquare = mutableBoard.KingSQ(~color);
+    if (board.isSquareAttacked(~color, opponentKingSquare)) {
+        Movelist moves;
+        if (color == White) {
+            Movegen::legalmoves<Black, Movetype::ALL>(mutableBoard, moves);
+        } else {
+            Movegen::legalmoves<White, Movetype::ALL>(mutableBoard, moves);
+        }
+        if (moves.size == 0) {
+            penalty -= 10000; // High reward for delivering checkmate
+        } else {
+            penalty -= 50; // Reward for checking the opponent
+        }
+    }
+
     return -penalty;
 }
 
