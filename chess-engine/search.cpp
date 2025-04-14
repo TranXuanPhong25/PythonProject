@@ -307,7 +307,6 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
-   Move ttMove = ttHit ? tte.move : NO_MOVE;
    {
       PROFILE_SCOPE(ttLookup);
       profiler.ttLookups++;
@@ -601,67 +600,18 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    {
       PROFILE_SCOPE(pruning);
       profiler.pruningAttempts++;
-
-      // More aggressive material condition - require at least one "major" piece
-      bool hasMajorPiece = board.pieces(KNIGHT, board.sideToMove) |
-                           board.pieces(BISHOP, board.sideToMove) |
-                           board.pieces(ROOK, board.sideToMove) |
-                           board.pieces(QUEEN, board.sideToMove);
-
-      if (hasMajorPiece && depth >= 3 && (!ttHit || entry.flag != HFALPHA || eval >= beta))
+      if (!inCheck && !is_pvnode && !isRoot)
       {
-         if (ply < MAX_PLY - 10)
+         // Use the zugzwang detector
+         if (!ZugzwangDetector::shouldAvoidNullMove(board))
          {
-            // Adaptive reduction based on multiple factors
-            // 1. Base reduction increases with depth
-            // 2. Higher reduction when eval is far above beta
-            // 3. Lower reduction in endgames
-            int materialCount = popcount(board.occAll);
-            int evalMargin = std::max(0, eval - beta);
+            // Get adaptive R value
+            int R = ZugzwangDetector::getNullMoveR(board, depth);
 
-            // Start with base reduction that scales with depth
-            int R = 3 + depth / 6;
-
-            // Increase R when significantly above beta
-            if (evalMargin > 100)
-               R++;
-
-            // Decrease R in endgames (less than 16 pieces on board)
-            if (materialCount < 16)
-               R = std::max(2, R - 1);
-
-            // Cap R to reasonable values
-            R = std::min(R, depth / 2 + 2);
-
-            // Enhanced zugzwang detection using multiple criteria
-            bool skipNullMove = false;
-
-            // 1. Few pieces total
-            if (getPieceCounts(board, board.sideToMove) <= 3)
-               skipNullMove = true;
-
-            // 2. King+pawns endgame situations
-            if (board.pieces(PAWN, board.sideToMove) != 0 &&
-                !(board.pieces(KNIGHT, board.sideToMove) |
-                  board.pieces(BISHOP, board.sideToMove) |
-                  board.pieces(ROOK, board.sideToMove) |
-                  board.pieces(QUEEN, board.sideToMove)))
-               skipNullMove = true;
-
-            // 3. King vs King+pawns is often zugzwang-prone
-            if (getPieceCounts(board, board.sideToMove) <= 5 &&
-                board.pieces(PAWN, ~board.sideToMove) != 0)
-               skipNullMove = true;
-
-            // 4. Avoid null move when evaluation is too far below beta
-            if (staticEval < beta - 120 * depth)
-               skipNullMove = true;
-
-            if (!skipNullMove)
+            // Only do null move if R > 0
+            if (R > 0)
             {
                board.makeNullMove();
-
-               // Use narrower window for more efficiency
                int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
                board.unmakeNullMove();
 
@@ -679,7 +629,8 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                   bool needsVerification = false;
 
                   // Always verify critical endgame positions
-                  if (materialCount <= 14)
+                  bool lowPieceCount = ZugzwangDetector::hasLowPieceCount(board, board.sideToMove);
+                  if (lowPieceCount)
                      needsVerification = true;
 
                   // Verify deeper searches
@@ -696,7 +647,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                      int verificationDepth;
 
                      // Use deeper verification for endgames (more zugzwang risk)
-                     if (materialCount <= 14)
+                     if (lowPieceCount)
                         verificationDepth = std::max(depth / 2, std::min(depth - 2, 6));
                      else
                         verificationDepth = std::max(depth / 3, std::min(depth - 3, 5));

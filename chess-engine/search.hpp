@@ -8,6 +8,7 @@
 #include "see.hpp"
 #include <algorithm>
 #include <cmath>
+#include "zugzwang.hpp"
 #include <math.h>
 using namespace Chess;
 
