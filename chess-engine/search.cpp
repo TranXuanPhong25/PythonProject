@@ -941,7 +941,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
             }
          }
       }
-
+      
       if (skipMove)
          continue;
 

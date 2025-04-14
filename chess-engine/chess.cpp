@@ -350,11 +350,3 @@ void Board::movePiece(Piece piece, Square fromSq, Square toSq) {
     board[fromSq] = None;
     board[toSq] = piece;
 }
-bool givesCheck(const Board&board,Move move) {
-    // Make a copy of the board and apply the move
-    Board temp = const_cast<Board&>(board);
-    temp.makeMove(move);
-    // Check if the opponent's king is in check after the move
-    Square enemyKingSq = temp.KingSQ(temp.sideToMove);
-    return temp.isSquareAttacked(~temp.sideToMove, enemyKingSq);
- }
