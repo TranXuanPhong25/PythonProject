@@ -303,7 +303,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 
    // Time the TT lookup
    bool ttHit = false;
-   bool is_pvnode = (beta - alpha) > 1;
+   bool isPvNode = (beta - alpha) > 1;
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
@@ -314,7 +314,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
          profiler.ttHits++;
    }
 
-   if (!is_pvnode && ttHit)
+   if (!isPvNode && ttHit)
    {
       if ((tte.flag == HFALPHA && tt_score <= alpha) || (tte.flag == HFBETA && tt_score >= beta) ||
           (tte.flag == HFEXACT))
@@ -366,7 +366,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
          profiler.pruningAttempts++;
 
          // Apply delta pruning - skip captures that can't improve alpha
-         if (!is_pvnode && !inCheck)
+         if (!isPvNode && !inCheck)
          {
             // Get the captured piece
             Piece capturedPiece = board.pieceAtB(to(move));
@@ -495,7 +495,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    U64 posKey = board.hashKey;
    bool ttHit;
    TTEntry &entry = table->probe_entry(posKey, ttHit);
-   bool is_pvnode = (beta - alpha) > 1;
+   bool isPvNode = (beta - alpha) > 1;
    int tt_score;
    Move ttMove = NO_MOVE;
 
@@ -509,7 +509,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // TT cutoff logic
-   if (!is_pvnode && ttHit && entry.depth >= depth)
+   if (!isPvNode && ttHit && entry.depth >= depth)
    {
       searchStats.ttCutoffs++;
 
@@ -583,7 +583,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       PROFILE_SCOPE(pruning);
 
       // Reverse Futility Pruning
-      if (!is_pvnode && !inCheck && depth <= 8 && eval >= beta)
+      if (!isPvNode && !inCheck && depth <= 8 && eval >= beta)
       {
          profiler.pruningAttempts++;
          int margin = 120 * depth;
@@ -595,12 +595,12 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   // Null move pruning with timing
-   if (!inCheck && !is_pvnode && !isRoot)
+   //Null move prunning with Zugzwang detection (NMP)
+   if (!inCheck && !isPvNode && !isRoot)
    {
       PROFILE_SCOPE(pruning);
       profiler.pruningAttempts++;
-      if (!inCheck && !is_pvnode && !isRoot)
+      if (!inCheck && !isPvNode && !isRoot)
       {
          // Use the zugzwang detector
          if (!ZugzwangDetector::shouldAvoidNullMove(board))
@@ -670,7 +670,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    }
 
    // ProbCut with timing
-   if (!is_pvnode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
+   if (!isPvNode && depth >= 5 && !inCheck && std::abs(beta) < IS_MATE_IN_MAX_PLY)
    {
       PROFILE_SCOPE(pruning);
       profiler.pruningAttempts++;
@@ -742,7 +742,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    {
       PROFILE_SCOPE(pruning);
 
-      if (!is_pvnode && !inCheck && depth <= 3)
+      if (!isPvNode && !inCheck && depth <= 3)
       {
          profiler.pruningAttempts++;
          int futilityMargin = 70 * depth;
@@ -752,7 +752,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
 
       // Static Null Move Pruning with timing
-      if (!is_pvnode && !inCheck && depth <= 5)
+      if (!isPvNode && !inCheck && depth <= 5)
       {
          profiler.pruningAttempts++;
          int margin = depth <= 3 ? 90 * depth : 300 + 50 * (depth - 3);
@@ -764,7 +764,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
 
       // Razoring with timing
-      if (!is_pvnode && !inCheck && depth <= 3 && staticEval + 350 * depth < alpha)
+      if (!isPvNode && !inCheck && depth <= 3 && staticEval + 350 * depth < alpha)
       {
          profiler.pruningAttempts++;
          // Try directly going to quiescence search
