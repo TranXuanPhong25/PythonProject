@@ -572,9 +572,9 @@ while running:
                             engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
                         board = chess.Board(CUSTOM_FEN)
                         if game_mode == HUMAN_VS_BOT or game_mode == HUMAN_VS_HUMAN:
-                            player_turn = board.turn
+                            player_turn = True
                         else:
-                            player_turn = board.turn
+                            player_turn = False
                         player_time, ai_time = 0, 0
                         input_text = ''
                         move_history = []
@@ -772,7 +772,7 @@ while running:
             ai_time = time.time() - start_time
 
             if game_mode != BOT_VS_BOT:
-                player_turn = board.turn
+                player_turn = True
             elif game_mode == BOT_VS_BOT:
                 pygame.time.delay(300)
 
