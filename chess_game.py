@@ -668,14 +668,14 @@ while running:
                     elif game_mode != HUMAN_VS_HUMAN and len(redo_stack) >= 2:
                         ai_move = redo_stack.pop()
                         human_move = redo_stack.pop()
-
+                        last_move_from = human_move.from_square
+                        last_move_to = human_move.to_square
                         start_animation(board, human_move)
 
-
                         update_move_history(board, human_move)
+                        board.push(human_move)
                         update_move_history(board, ai_move)
                         board.push(ai_move)
-                        board.push(human_move)
 
                         squares_affected = [
                             human_move.from_square, human_move.to_square,
