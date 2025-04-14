@@ -175,11 +175,11 @@ int evaluatePawnStructure(const Board &board) {
     PawnStructureContext ctx(board);
     
     int score = 0;
-    score -= evaluateDoubledPawns(ctx, White);
-    score += evaluateDoubledPawns(ctx, Black);
+    score += evaluateDoubledPawns(ctx, White);
+    score -= evaluateDoubledPawns(ctx, Black);
 
-    score -= evaluateIsolatedPawns(ctx, White);
-    score += evaluateIsolatedPawns(ctx, Black);
+    score += evaluateIsolatedPawns(ctx, White);
+    score -= evaluateIsolatedPawns(ctx, Black);
 
     score += evaluatePassedPawns(ctx, White);
     score -= evaluatePassedPawns(ctx, Black);
@@ -1470,85 +1470,4 @@ int evaluateCastlingAbility(const Board &board, Color color) {
         }
     }
     return score;
-}
-
-// Wrapper functions to maintain backward compatibility
-int evaluateDoubledPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateDoubledPawns(ctx, color);
-}
-
-int evaluateIsolatedPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateIsolatedPawns(ctx, color);
-}
-
-int evaluatePassedPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePassedPawns(ctx, color);
-}
-
-int evaluatePhalanxPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePhalanxPawns(ctx, color);
-}
-
-int evaluatePassedPawnSupport(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePassedPawnSupport(ctx, color);
-}
-
-int evaluateBlockedPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateBlockedPawns(ctx, color);
-}
-
-int evaluatePawnChains(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePawnChains(ctx, color);
-}
-
-int evaluateConnectedPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateConnectedPawns(ctx, color);
-}
-
-int evaluatePawnShield(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePawnShield(ctx, color);
-}
-
-int evaluateBackwardPawns(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateBackwardPawns(ctx, color);
-}
-
-int evaluateHolesAndOutposts(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateHolesAndOutposts(ctx, color);
-}
-
-int evaluatePawnLeverThreats(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePawnLeverThreats(ctx, color);
-}
-
-int evaluateFileOpenness(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateFileOpenness(ctx, color);
-}
-
-int evaluateSpaceAdvantage(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluateSpaceAdvantage(ctx, color);
-}
-
-int evaluatePawnMajority(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePawnMajority(ctx, color);
-}
-
-int evaluatePawnStorm(const Board &board, Color color) {
-    PawnStructureContext ctx(board);
-    return evaluatePawnStorm(ctx, color);
 }
