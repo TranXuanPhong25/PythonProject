@@ -889,3 +889,99 @@ int evaluateKingOpenFiles(const Board &board, Color color) {
 
     return 0; // No penalty if the file is not open or semi-open
 }
+
+int evaluateQueenControlAndCheckmatePotential(const Board &board, Color color) {
+    int score = 0;
+    Color opponent = ~color;
+    
+    // Lấy vị trí các quân quan trọng
+    Bitboard ourQueens = board.pieces(QUEEN, color);
+    if (!ourQueens) return 0; // Thoát sớm
+    
+    Bitboard enemyKing = board.pieces(KING, opponent);
+    Square enemyKingSq = board.KingSQ(opponent);
+    
+    // Tạo bản sao mutable để tránh vấn đề const
+    Board &mutableBoard = const_cast<Board &>(board);
+    
+    // Lưu trữ các giá trị sử dụng nhiều lần
+    Bitboard allPieces = board.All();
+    Bitboard ourPieces = board.Us(color);
+    Bitboard enemyPieces = board.Enemy(color);
+    
+    // Tính toán kingAttacks một lần
+    Bitboard kingAttacks = KingAttacks(enemyKingSq);
+    Bitboard kingZone = kingAttacks | (1ULL << enemyKingSq);
+    
+    // Lưu trữ các ô trung tâm
+    Bitboard centerSquares = (1ULL << SQ_D4) | (1ULL << SQ_E4) | (1ULL << SQ_D5) | (1ULL << SQ_E5);
+    
+    // Đánh giá từng quân hậu
+    while (ourQueens) {
+        Square queenSq = static_cast<Square>(pop_lsb(ourQueens));
+        
+        // 1. Đánh giá khả năng kiểm soát của quân hậu
+        Bitboard queenAttacks = QueenAttacks(queenSq, allPieces) & ~ourPieces;
+        
+        // 2-3. Đánh giá khả năng tấn công
+        int attackBonus = 0;
+        attackBonus += popcount(queenAttacks & enemyPieces) * 5;          // Tấn công quân đối phương
+        attackBonus += popcount(queenAttacks & kingZone) * 10;            // Tấn công vùng quanh vua
+        attackBonus += ((queenAttacks & centerSquares) ? 15 : 0);         // Kiểm soát trung tâm
+        score += popcount(queenAttacks) * 2 + attackBonus;                // Điểm cơ bản + tấn công
+        
+        // 4. Đánh giá chiếu hết tiềm năng
+        int distance = square_distance(queenSq, enemyKingSq);
+        if (distance <= 2) {
+            score += (3 - distance) * 15; // Càng gần càng tốt
+            
+            // Kiểm tra nếu quân hậu đang tấn công vua
+            if (queenAttacks & enemyKing) {
+                score += 30;
+                
+                // Kiểm tra nếu vua đối phương không có nước đi hợp lệ
+                Bitboard kingMoves = kingAttacks & ~board.Us(opponent);
+                
+                // Kiểm tra từng ô di chuyển có thể của vua đối phương
+                Bitboard safeKingMoves = kingMoves;
+                Bitboard tempKingMoves = kingMoves;
+                
+                while (tempKingMoves) {
+                    Square kingMoveSq = static_cast<Square>(pop_lsb(tempKingMoves));
+                    
+                    // Nếu ô này bị tấn công bởi bất kỳ quân nào của bên ta
+                    if (mutableBoard.attackersForSide(color, kingMoveSq, allPieces)) {
+                        safeKingMoves &= ~(1ULL << kingMoveSq);
+                    }
+                }
+                
+                // Nếu vua không còn nước đi an toàn và đang bị tấn công
+                if (safeKingMoves == 0 && mutableBoard.attackersForSide(color, enemyKingSq, allPieces)) {
+                    score += 200; // Rất có khả năng chiếu hết
+                }
+            }
+        }
+        
+        // 6. Ưu tiên quân hậu an toàn (không bị tấn công)
+        if (!mutableBoard.attackersForSide(opponent, queenSq, allPieces)) {
+            score += 10;
+        }
+        
+        // 7-8. Kiểm tra killer moves và history table
+        int side = (color == White) ? 0 : 1;
+        bool killerBonus = false;
+        
+        for (int ply = 0; ply < std::min(MAX_PLY, 10) && !killerBonus; ++ply) {
+            if (killerMoves[ply][0] == queenSq || killerMoves[ply][1] == queenSq) {
+                score += 8;
+                killerBonus = true;
+            }
+        }
+        
+        if (historyTable[side][board.KingSQ(color)][queenSq] > 0) {
+            score += 5;
+        }
+    }
+    
+    return score;
+}

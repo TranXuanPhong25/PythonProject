@@ -852,21 +852,87 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       bool isCapture = is_capture(board, move);
       bool isPromotion = promoted(move);
 
-      if (futilityPruning && i > 0 && !isCapture && !isPromotion)
-         continue; // Skip this quiet move
+      // Get history score for this move to use in pruning decisions
+      int side = board.sideToMove == White ? 0 : 1;
+      int history_score = historyTable[side][from(move)][to(move)];
 
-<<<<<<<<< Temporary merge branch 1
-      if (!isRoot && !inCheck && !isCapture && !isPromotion && !inCheck && 
-          i >= moveCountThreshold && depth <= 8)
+      // Get continuation history score if we have a previous move
+      int continuation_score = 0;
+      if (lastMove != NO_MOVE)
       {
-          continue;  // Skip this quiet move - too late in the list
+         Piece lastPiece = board.pieceAtB(to(lastMove));
+         int lastTo = to(lastMove);
+         Piece currPiece = board.pieceAtB(from(move));
+         int currTo = to(move);
+
+         if (lastPiece != None && currPiece != None)
+         {
+            continuation_score = continuationHistory[lastPiece][lastTo][currPiece][currTo];
+         }
       }
-=========
+
+      // Combine scores for pruning decision
+      int combined_history = history_score;
+      if (lastMove != NO_MOVE)
+      {
+         // Weight the scores (can be adjusted based on testing)
+         combined_history = (history_score * 2 + continuation_score) / 3;
+      }
+
+      // Apply pruning with timing
+      if (futilityPruning && i > 0 && !isCapture && !isPromotion)
+      {
+         continue; // Skip this quiet move
+      }
+
       // Update mobility incrementally
       updateMobility(board, move, mobilityScore, board.sideToMove);
->>>>>>>>> Temporary merge branch 2
 
-      board.makeMove(move);
+      // History-based pruning with timing
+      bool skipMove = false;
+      {
+         PROFILE_SCOPE(pruning);
+
+         if (!isRoot && !inCheck && !isCapture && !isPromotion && depth <= 8)
+         {
+            profiler.pruningAttempts++;
+
+            // Standard count-based LMP
+            if (i >= moveCountThreshold)
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
+
+            // History-based pruning: skip quiet moves with very bad history scores
+            else if (i > 3 && combined_history <= HistoryPruningThreshold[depth])
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
+
+            // Continuation-history based pruning (more aggressive)
+            else if (lastMove != NO_MOVE && i > 2 && continuation_score <= ContinuationPruningThreshold[depth])
+            {
+               skipMove = true;
+               profiler.pruningSuccesses++;
+            }
+         }
+      }
+
+      if (skipMove)
+         continue;
+
+      // Make move with timing
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.makeMove(move);
+         profiler.movesMade++;
+      }
+
+      // Add the move to our custom move history
+      addMoveToHistory(move, board.hashKey);
+
       movesSearched++;
 
       int score;
