@@ -982,3 +982,144 @@ int evaluateQueenControlAndCheckmatePotential(const Board &board, Color color) {
     
     return score;
 }
+
+int evaluateCastlingAbility(const Board &board, Color color) {
+    int score = 0;
+    Color opponent = ~color;
+    
+    // Judge castling
+    unsigned castlingRights = board.castlingRights;
+    
+    // Identify the castling rights for the current color
+    bool hasKingsideCastling = false;
+    bool hasQueensideCastling = false;
+    
+    if (color == White) {
+        hasKingsideCastling = (castlingRights & 1); // WHITE_OO (0001)
+        hasQueensideCastling = (castlingRights & 2); // WHITE_OOO (0010)
+    } else {
+        hasKingsideCastling = (castlingRights & 4); // BLACK_OO (0100)
+        hasQueensideCastling = (castlingRights & 8); // BLACK_OOO (1000)
+    }
+    
+    // Bonus basic point for castling rights
+    if (hasKingsideCastling) score += 15;
+    if (hasQueensideCastling) score += 10;
+    
+    // Check if the king is already castled
+    Square kingPos = board.KingSQ(color);
+    int kingFile = square_file(kingPos);
+    int kingRank = square_rank(kingPos);
+    int expectedRank = (color == White) ? 0 : 7;
+    int castledBonus = 0;
+    
+    // Check if the king is castled
+    if (kingRank == expectedRank) {
+        if (kingFile == 6) {      // G-file (castled kingside)
+            castledBonus = 40;
+        } 
+        else if (kingFile == 2) { // C-file (castled queenside)
+            castledBonus = 35;
+        }
+    }
+    
+    // Check path for castling if not castled yet
+    if (castledBonus == 0 && (hasKingsideCastling || hasQueensideCastling)) {
+        
+        Board &mutableBoard = const_cast<Board &>(board);
+        Bitboard allPieces = board.All();
+        
+        // Store the squares for castling path
+        Square squareB = file_rank_square(File(FILE_B), Rank(expectedRank));
+        Square squareC = file_rank_square(File(FILE_C), Rank(expectedRank));
+        Square squareD = file_rank_square(File(FILE_D), Rank(expectedRank));
+        Square squareF = file_rank_square(File(FILE_F), Rank(expectedRank));
+        Square squareG = file_rank_square(File(FILE_G), Rank(expectedRank));
+        
+        // Check path for castling kingside
+        if (hasKingsideCastling) {
+            bool pathClear = (board.pieceAtB(squareF) == None) && (board.pieceAtB(squareG) == None);
+            
+            if (pathClear) {
+                // Combined check for squares F and G
+                // Check if the squares F and G are attacked by the opponent
+                bool pathUnderAttack = mutableBoard.attackersForSide(opponent, squareF, allPieces) || 
+                                      mutableBoard.attackersForSide(opponent, squareG, allPieces);
+                
+                if (!pathUnderAttack) {
+                    score += 20; // Safe path
+                } else {
+                    score -= 5;  // Path under attack
+                }
+            } else {
+                score -= 8; // Path blocked
+            }
+        }
+        
+        // Check path for castling queenside
+        if (hasQueensideCastling) {
+            bool pathClear = (board.pieceAtB(squareB) == None) && 
+                            (board.pieceAtB(squareC) == None) &&
+                            (board.pieceAtB(squareD) == None);
+            
+            if (pathClear) {
+                // Check if the squares B, C, and D are attacked by the opponent
+                bool pathUnderAttack = mutableBoard.attackersForSide(opponent, squareC, allPieces) || 
+                                      mutableBoard.attackersForSide(opponent, squareD, allPieces);
+                
+                if (!pathUnderAttack) {
+                    score += 15; // Safe path
+                } else {
+                    score -= 5;  // Path under attack
+                }
+            } else {
+                score -= 8; // Path blocked
+            }
+        }
+    }
+    
+    // Modify the score based on the game phase
+    float gamePhase = getGamePhase(board);
+    
+    if (gamePhase > 0.5) { // Endgame phase
+        castledBonus = static_cast<int>(castledBonus * (1.0 - gamePhase));
+    }
+    
+    score += castledBonus;
+    
+    // Analyze the advantage after castling
+    if (castledBonus > 0) {
+        Bitboard rooks = board.pieces(ROOK, color);
+        
+        // Check squares for castling path
+        if (kingFile == 6) {
+            // Check rook h has connection with the king
+            Square squareH = file_rank_square(File(FILE_H), Rank(expectedRank));
+            if (rooks & (1ULL << squareH)) {
+                score += 5;
+            }
+            
+            // Check rook of file pawns
+            Square squareE = file_rank_square(File(FILE_E), Rank(expectedRank));
+            Square squareF = file_rank_square(File(FILE_F), Rank(expectedRank));
+            if (rooks & ((1ULL << squareE) | (1ULL << squareF))) {
+                score += 15; // Rook on file pawns after castling
+            }
+        }
+        else if (kingFile == 2) { 
+            // Check rook a has connection with the king
+            Square squareA = file_rank_square(File(FILE_A), Rank(expectedRank));
+            if (rooks & (1ULL << squareA)) {
+                score += 5;
+            }
+            
+            // Check rook of file pawns
+            Square squareD = file_rank_square(File(FILE_D), Rank(expectedRank));
+            Square squareE = file_rank_square(File(FILE_E), Rank(expectedRank));
+            if (rooks & ((1ULL << squareD) | (1ULL << squareE))) {
+                score += 15; // Rook on file pawns after castling
+            }
+        }
+    }
+    return score;
+}

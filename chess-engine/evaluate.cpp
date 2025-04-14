@@ -128,6 +128,9 @@ int evaluate(const Board &board)
     // King checkmate potential (both phases)
     score += (board.sideToMove == White ? evaluateQueenControlAndCheckmatePotential(board, White) : -evaluateQueenControlAndCheckmatePotential(board, Black));
 
+    // King castling ability (both phases)
+    score += (board.sideToMove == White ? evaluateCastlingAbility(board, White) : -evaluateCastlingAbility(board, Black));
+
     // Return score from perspective of side to move
     return board.sideToMove == White ? score : -score;
 }

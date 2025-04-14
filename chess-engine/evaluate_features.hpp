@@ -30,3 +30,4 @@ int evaluateKingSafety(const Board &board, Color color);
 int evaluateKingOpenFiles(const Board &board, Color color);
 int evaluateKingMobility(const Board &board, Color color);
 int evaluateQueenControlAndCheckmatePotential(const Board &board, Color color);
+int evaluateCastlingAbility(const Board &board, Color color);
