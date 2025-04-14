@@ -112,10 +112,9 @@ bool moveResolvesCheck(Board &board, Move move)
     return resolvesCheck;
 }
 
+// Enhanced move ordering function for regular search
 void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
 {
-    int mobilityScore = evaluateMobility(board, board.sideToMove);
-
     // Get the current position's last move for countermove lookup
     Move lastMove = getLastMove();
     Move counterMove = NO_MOVE;
@@ -130,6 +129,10 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
         counterMove = counterMoveTable[lastMovePiece][lastMoveToSq];
     }
     
+    // Pre-calculate mobility score once
+    int mobilityScore = evaluateMobility(board, board.sideToMove);
+    
+    // Score each move
     for (int i = 0; i < moves.size; ++i)
     {
         Move move = moves[i].move;
@@ -225,39 +228,76 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
         // Add mobility score to the move's score
         score += mobilityScore;
 
-        // Restore the board state (handled by updateMobility)
-
+        // Restore the board state (handled by updateMobility
+        // Assign final score to the move
         moves[i].value = score;
     }
 }
 
+// Enhanced move ordering for quiescence search
 void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
 {
-    // Loop through moves in movelist.
+    // Score each move in the quiescence search list
     for (int i = 0; i < list.size; i++)
     {
-        Piece victim = board.pieceAtB(to(list[i].move));
-        Piece attacker = board.pieceAtB(from(list[i].move));
-        if (list[i].move == tt_move)
+        Move move = list[i].move;
+        Piece victim = board.pieceAtB(to(move));
+        Piece attacker = board.pieceAtB(from(move));
+        bool isPromotion = promoted(move);
+        
+        // Base score
+        int score = 0;
+        
+        // 1. PV move from transposition table
+        if (move == tt_move)
         {
-            list[i].value = 20000000;
+            score = PvMoveScore;
         }
-        else if (victim != None)
+        // 2. Captures and promotions
+        else if (victim != None || isPromotion)
         {
-            // If it's a capture move, we score using MVVLVA (Most valuable
-            // victim, Least Valuable Attacker)
-            list[i].value = mvv_lva[attacker][victim] +
-                            (GoodCaptureScore * see(board, list[i].move, -107));
+            // For captures, use MVV-LVA and SEE
+            if (victim != None)
+            {
+                // MVV-LVA base scoring
+                score += mvv_lva[attacker][victim];
+                
+                // Add SEE score for better ordering
+                bool isGoodCapture = see(board, move, -65);
+                if (isGoodCapture)
+                {
+                    // Good capture
+                    score += GoodCaptureScore;
+                }
+                else
+                {
+                    // Bad capture, but sometimes necessary in QS
+                    score += BadCaptureScore;
+                }
+            }
+            
+            // For promotions, prioritize queen promotions
+            if (isPromotion)
+            {
+                score += PromotionScore;
+                score += 200; 
+            }
         }
+        
+        // Set the final score
+        list[i].value = score;
     }
 }
 
+// Find the best move from the list at the given position
 void pickNextMove(const int &moveNum, Movelist &list)
 {
     ExtMove temp;
     int index = 0;
     int bestscore = -INF_BOUND;
     int bestnum = moveNum;
+    
+    // Find the highest scoring move
     for (index = moveNum; index < list.size; ++index)
     {
         if (list[index].value > bestscore)
@@ -266,7 +306,218 @@ void pickNextMove(const int &moveNum, Movelist &list)
             bestnum = index;
         }
     }
+    
+    // Swap the highest scoring move to the current position
     temp = list[moveNum];
-    list[moveNum] = list[bestnum]; // Sort the highest score move to highest.
+    list[moveNum] = list[bestnum];
     list[bestnum] = temp;
+}
+
+bool StagedMoveGenerator::hasNext() const
+{
+    // Still have moves to generate in current stage or more stages to go
+    if (currentMoveIndex < moves.size || currentStage < REMAINING_MOVES)
+        return true;
+    return false;
+}
+
+Move StagedMoveGenerator::nextMove()
+{
+    if (!hasNext())
+        return NO_MOVE;
+    
+    // TT move stage
+    if (currentStage == TT_MOVE)
+    {
+        currentStage = GOOD_CAPTURES;
+        currentMoveIndex = 0;
+        
+        // If we have a TT move, return it first
+        if (ttMove != NO_MOVE && !ttMoveSearched)
+        {
+            // Verify it's a legal move in our list
+            for (int i = 0; i < moves.size; i++)
+            {
+                if (moves[i].move == ttMove)
+                {
+                    ttMoveSearched = true;
+                    return ttMove;
+                }
+            }
+        }
+        // No TT move or not found, skip to next stage
+        ttMoveSearched = true;
+    }
+    
+    // Good captures stage
+    if (currentStage == GOOD_CAPTURES)
+    {
+        while (currentMoveIndex < moves.size)
+        {
+            Move move = moves[currentMoveIndex++].move;
+            
+            // Skip the TT move as it's already been returned
+            if (move == ttMove)
+                continue;
+            
+            Piece victim = board.pieceAtB(to(move));
+            
+            // Process captures with positive SEE
+            if (victim != None && see(board, move, -100))
+            {
+                return move;
+            }
+        }
+        
+        // Move to killer moves stage
+        currentStage = KILLER_MOVES;
+        currentMoveIndex = 0;
+    }
+    
+    // Killer moves stage
+    if (currentStage == KILLER_MOVES)
+    {
+        // Try both killer moves
+        while (currentMoveIndex < 2)
+        {
+            Move killerMove = killerMoves[ply][currentMoveIndex++];
+            
+            // Skip invalid or already processed moves
+            if (killerMove == NO_MOVE || killerMove == ttMove)
+                continue;
+                
+            // Check if it's a legal move in our list
+            for (int i = 0; i < moves.size; i++)
+            {
+                if (moves[i].move == killerMove && 
+                    board.pieceAtB(to(killerMove)) == None) // Make sure it's not a capture
+                {
+                    return killerMove;
+                }
+            }
+        }
+        
+        // Move to counter moves stage
+        currentStage = COUNTER_MOVES;
+        currentMoveIndex = 0;
+    }
+    
+    // Counter moves stage
+    if (currentStage == COUNTER_MOVES)
+    {
+        // Get the last move from history
+        Move lastMove = getLastMove();
+        
+        if (lastMove != NO_MOVE)
+        {
+            // Get the counter move for this position
+            Piece lastPiece = board.pieceAtB(to(lastMove));
+            int lastToSq = to(lastMove);
+            
+            if (lastPiece != None)
+            {
+                Move counterMove = counterMoveTable[lastPiece][lastToSq];
+                
+                // Skip if already processed
+                if (counterMove != NO_MOVE && 
+                    counterMove != ttMove && 
+                    counterMove != killerMoves[ply][0] && 
+                    counterMove != killerMoves[ply][1])
+                {
+                    // Check if it's a legal move in our list
+                    for (int i = 0; i < moves.size; i++)
+                    {
+                        if (moves[i].move == counterMove && 
+                            board.pieceAtB(to(counterMove)) == None) // Make sure it's not a capture
+                        {
+                            currentStage = QUIET_MOVES;
+                            currentMoveIndex = 0;
+                            return counterMove;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // No counter move or not found, move to quiet moves stage
+        currentStage = QUIET_MOVES;
+        currentMoveIndex = 0;
+    }
+    
+    // Quiet moves stage (with good history)
+    if (currentStage == QUIET_MOVES)
+    {
+        while (currentMoveIndex < moves.size)
+        {
+            Move move = moves[currentMoveIndex++].move;
+            
+            // Skip moves already processed
+            if (move == ttMove || 
+                move == killerMoves[ply][0] || 
+                move == killerMoves[ply][1])
+                continue;
+                
+            // Process only quiet moves with good history
+            if (board.pieceAtB(to(move)) == None && !promoted(move))
+            {
+                int side = board.sideToMove == White ? 0 : 1;
+                int history = historyTable[side][from(move)][to(move)];
+                
+                // Only return moves with decent history scores
+                if (history > -5000)
+                    return move;
+            }
+        }
+        
+        // Move to bad captures stage
+        currentStage = BAD_CAPTURES;
+        currentMoveIndex = 0;
+    }
+    
+    // Bad captures stage
+    if (currentStage == BAD_CAPTURES)
+    {
+        while (currentMoveIndex < moves.size)
+        {
+            Move move = moves[currentMoveIndex++].move;
+            
+            // Skip moves already processed
+            if (move == ttMove)
+                continue;
+                
+            Piece victim = board.pieceAtB(to(move));
+            
+            // Process captures with negative SEE
+            if (victim != None && !see(board, move, -100))
+            {
+                return move;
+            }
+        }
+        
+        // Move to remaining moves stage
+        currentStage = REMAINING_MOVES;
+        currentMoveIndex = 0;
+    }
+    
+    // Remaining moves stage
+    if (currentStage == REMAINING_MOVES)
+    {
+        while (currentMoveIndex < moves.size)
+        {
+            Move move = moves[currentMoveIndex++].move;
+            
+            // Skip all moves already processed at earlier stages
+            if (move == ttMove || 
+                move == killerMoves[ply][0] || 
+                move == killerMoves[ply][1] || 
+                board.pieceAtB(to(move)) != None)
+                continue;
+                
+            // Return any remaining unprocessed moves
+            return move;
+        }
+    }
+    
+    // No moves left
+    return NO_MOVE;
 }
