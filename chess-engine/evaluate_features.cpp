@@ -46,28 +46,30 @@ PawnStructureContext::PawnStructureContext(const Board& b) : board(b) {
 
 // Helper method implementations
 bool PawnStructureContext::isPassed(Square sq, Color color) const {
+    // Use the precalculated file-based arrays from the context
     int file = square_file(sq);
     int rank = square_rank(sq);
     
-    // Create a mask for files (current, left, and right)
+    // Get enemy pawns directly from context
+    Bitboard enemyPawns = (color == White) ? blackPawns : whitePawns;
+    
+    // Create a mask for files (current, left, and right) using precalculated MASK_FILE arrays
     Bitboard fileMask = MASK_FILE[file];
     if (file > 0) fileMask |= MASK_FILE[file - 1];
     if (file < 7) fileMask |= MASK_FILE[file + 1];
     
-    // Create a mask for ranks ahead of the pawn
-    Bitboard rankMask = 0ULL;
+    // More efficient rank mask creation
+    Bitboard rankMask;
     if (color == White) {
-        for (int r = rank + 1; r <= 7; ++r)
-            rankMask |= MASK_RANK[r];
+        // For white pawns, check ranks ahead (higher ranks)
+        rankMask = ~((1ULL << ((rank + 1) * 8)) - 1);
     } else {
-        for (int r = rank - 1; r >= 0; --r)
-            rankMask |= MASK_RANK[r];
+        // For black pawns, check ranks ahead (lower ranks)
+        rankMask = (1ULL << (rank * 8)) - 1;
     }
     
-    // Check if there are enemy pawns in the blocking zone
+    // Single operation to check for blockers in the stopping mask
     Bitboard blockerZone = fileMask & rankMask;
-    Bitboard enemyPawns = (color == White) ? blackPawns : whitePawns;
-    
     return (blockerZone & enemyPawns) == 0;
 }
 
@@ -567,52 +569,50 @@ int evaluateHolesAndOutposts(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
     Color opponent = ~color;
     
-    // Get important bitboards
+    // Get important bitboards from context instead of recomputing
     Bitboard ourPawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     Bitboard enemyPawns = (color == White) ? ctx.blackPawns : ctx.whitePawns;
+    Bitboard ourPawnAttacks = (color == White) ? ctx.whitePawnAttacks : ctx.blackPawnAttacks;
+    Bitboard enemyPawnAttacks = (color == White) ? ctx.blackPawnAttacks : ctx.whitePawnAttacks;
+    
+    // Get piece bitboards (only once)
     Bitboard ourKnights = ctx.board.pieces(KNIGHT, color);
     Bitboard ourBishops = ctx.board.pieces(BISHOP, color);
     Bitboard ourRooks = ctx.board.pieces(ROOK, color);
     Bitboard allPieces = ctx.board.All();
     
-    // Calculate squares not attacked by enemy pawns (potential outposts)
-    Bitboard enemyPawnAttacks = 0;
-    Bitboard tempPawns = enemyPawns;
-    while (tempPawns) {
-        Square sq = static_cast<Square>(pop_lsb(tempPawns));
-        enemyPawnAttacks |= PawnAttacks(sq, opponent);
+    // Use the precalculated enemy king position
+    Square enemyKing = (color == White) ? ctx.blackKingSq : ctx.whiteKingSq;
+    
+    // Potential outposts are squares not attacked by enemy pawns
+    Bitboard potentialOutposts = ~enemyPawnAttacks;
+    
+    // Outposts need to be supported by our pawns
+    Bitboard supportedSquares = ourPawnAttacks;
+    
+    // Strong outposts are supported squares not attacked by enemy pawns
+    Bitboard strongOutposts = potentialOutposts & supportedSquares & ~allPieces;
+    
+    // Define value constants (moved outside of loops)
+    const int centerValue = 10;
+    const int extendedCenterValue = 7;
+    const int thirdRankValue = 5;
+    const int fourthRankValue = 8;
+    const int fifthRankValue = 12;
+    const int sixthRankValue = 15;
+    
+    // Precompute center and extended center masks
+    Bitboard centerMask = (1ULL << SQ_D4) | (1ULL << SQ_E4) | (1ULL << SQ_D5) | (1ULL << SQ_E5);
+    Bitboard extendedCenterMask = 0ULL;
+    for (int r = 2; r <= 5; ++r) {
+        for (int f = 2; f <= 5; ++f) {
+            if ((f == 3 || f == 4) && (r == 3 || r == 4)) continue; // Skip center squares
+            extendedCenterMask |= 1ULL << (r * 8 + f);
+        }
     }
-    
-    Bitboard potentialOutposts = ~enemyPawnAttacks & ~allPieces;
-    
-    // Calculate pawn-supported squares
-    Bitboard supportedSquares = 0;
-    tempPawns = ourPawns;
-    while (tempPawns) {
-        Square sq = static_cast<Square>(pop_lsb(tempPawns));
-        supportedSquares |= PawnAttacks(sq, color);
-    }
-    
-    // Strong outposts: squares not attacked by enemy pawns AND supported by our pawns
-    Bitboard strongOutposts = potentialOutposts & supportedSquares;
-    
-    // Value for different regions of the board
-    const int centerValue = 10;       // d4, e4, d5, e5
-    const int extendedCenterValue = 7; // c3-f6 area excluding center
-    const int thirdRankValue = 5;      // 3rd rank for white, 6th for black
-    const int fourthRankValue = 8;     // 4th rank for white, 5th for black
-    const int fifthRankValue = 12;     // 5th rank for white, 4th for black
-    const int sixthRankValue = 15;     // 6th rank for white, 3rd for black
-    
-    // Get enemy king position for proximity bonus
-    Square enemyKing = ctx.board.KingSQ(opponent);
-    
-    // Check actual piece placement on outposts
-    Bitboard outpostKnights = ourKnights & strongOutposts;
-    Bitboard outpostBishops = ourBishops & strongOutposts;
-    Bitboard outpostRooks = ourRooks & strongOutposts;
     
     // Process knight outposts (most valuable)
+    Bitboard outpostKnights = ourKnights & strongOutposts;
     while (outpostKnights) {
         Square sq = static_cast<Square>(pop_lsb(outpostKnights));
         int rank = square_rank(sq);
@@ -622,32 +622,28 @@ int evaluateHolesAndOutposts(const PawnStructureContext &ctx, Color color) {
         // Base value for knight outpost
         int outpostValue = 18;
         
-        // Adjust value based on rank (higher ranks worth more)
+        // Rank value adjustments - use lookup array instead of conditionals
+        const int rankValues[8] = {0, 0, 0, thirdRankValue, fourthRankValue, fifthRankValue, sixthRankValue, 0};
         rank = (color == White) ? rank : 7 - rank;
-        if (rank == 3) outpostValue += thirdRankValue;
-        else if (rank == 4) outpostValue += fourthRankValue;
-        else if (rank == 5) outpostValue += fifthRankValue;
-        else if (rank == 6) outpostValue += sixthRankValue;
-        
-        // Central outposts are more valuable
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            // Real center
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                outpostValue += centerValue;
-            } else {
-                outpostValue += extendedCenterValue;
-            }
+        if (rank >= 0 && rank < 8) {
+            outpostValue += rankValues[rank];
         }
         
-        // Proximity to enemy king bonus
+        // Use bitwise operations for center detection - much faster than conditionals
+        if (centerMask & (1ULL << sq)) {
+            outpostValue += centerValue;
+        } else if (extendedCenterMask & (1ULL << sq)) {
+            outpostValue += extendedCenterValue;
+        }
+        
+        // Proximity to enemy king bonus - simplified calculation
         outpostValue += std::max(0, 7 - distance) * 3;
         
-        // Consider piece activity from the outpost
+        // Calculate knight attacks once
         Bitboard knightAttacks = KnightAttacks(sq);
-        int attackCount = popcount(knightAttacks & ctx.board.occEnemy);
-        outpostValue += attackCount * 6;
+        outpostValue += popcount(knightAttacks & ctx.board.Enemy(color)) * 6;
         
-        // History heuristic integration
+        // Add history heuristic bonus (simplified)
         int side = (color == White) ? 0 : 1;
         int historyScore = historyTable[side][ctx.board.KingSQ(color)][sq];
         outpostValue += std::min(10, historyScore / 100);
@@ -655,94 +651,80 @@ int evaluateHolesAndOutposts(const PawnStructureContext &ctx, Color color) {
         bonus += outpostValue;
     }
     
-    // Process bishop outposts (also valuable)
+    // Process bishop outposts (also valuable) - similar optimizations as above
+    Bitboard outpostBishops = ourBishops & strongOutposts;
     while (outpostBishops) {
         Square sq = static_cast<Square>(pop_lsb(outpostBishops));
         int rank = square_rank(sq);
         int file = square_file(sq);
         
-        // Base value for bishop outpost
         int outpostValue = 15;
         
-        // Adjust value based on rank
+        // Convert to relative rank once, use array lookup for values
+        const int bishopRankValues[8] = {0, 0, 0, thirdRankValue-2, fourthRankValue-2, fifthRankValue-2, sixthRankValue-2, 0};
         rank = (color == White) ? rank : 7 - rank;
-        if (rank == 3) outpostValue += thirdRankValue - 2;
-        else if (rank == 4) outpostValue += fourthRankValue - 2;
-        else if (rank == 5) outpostValue += fifthRankValue - 2;
-        else if (rank == 6) outpostValue += sixthRankValue - 2;
-        
-        // Central outposts bonus
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                outpostValue += centerValue - 2;
-            } else {
-                outpostValue += extendedCenterValue - 2;
-            }
+        if (rank >= 0 && rank < 8) {
+            outpostValue += bishopRankValues[rank];
         }
         
-        // Evaluate bishop's diagonal influence
+        // Use bitwise operations for center detection
+        if (centerMask & (1ULL << sq)) {
+            outpostValue += centerValue - 2;
+        } else if (extendedCenterMask & (1ULL << sq)) {
+            outpostValue += extendedCenterValue - 2;
+        }
+        
+        // Calculate bishop attacks once and reuse
         Bitboard bishopAttacks = BishopAttacks(sq, allPieces);
-        int attackCount = popcount(bishopAttacks & ctx.board.occEnemy);
-        outpostValue += attackCount * 4;
+        outpostValue += popcount(bishopAttacks & ctx.board.Enemy(color)) * 4;
         
         bonus += outpostValue;
     }
     
     // Process rook outposts (less common but valuable on 7th rank)
+    Bitboard outpostRooks = ourRooks & strongOutposts;
     while (outpostRooks) {
         Square sq = static_cast<Square>(pop_lsb(outpostRooks));
         int rank = (color == White) ? square_rank(sq) : 7 - square_rank(sq);
         
-        // Rooks are especially strong on 7th rank
+        // Rooks are especially strong on 7th rank - one simple comparison instead of multiple cases
         if (rank == 6) {
             bonus += 25;
             
-            // Extra bonus for rook attacking pawns on 7th
+            // Compute rook attacks once
             Bitboard rookAttacks = RookAttacks(sq, allPieces);
-            int pawnsAttacked = popcount(rookAttacks & ctx.board.pieces(PAWN, opponent));
-            bonus += pawnsAttacked * 8;
-        }
-        else {
+            bonus += popcount(rookAttacks & ctx.board.pieces(PAWN, opponent)) * 8;
+        } else {
             bonus += 12;
         }
     }
     
-    // Potential outposts (squares where we could place pieces)
-    Bitboard remainingOutposts = potentialOutposts & ~(outpostKnights | outpostBishops | outpostRooks);
+    // Remaining potential outposts - simplified loop
+    Bitboard remainingOutposts = strongOutposts & ~(outpostKnights | outpostBishops | outpostRooks);
     
-    // Only consider strategically important potential outposts
-    remainingOutposts &= supportedSquares;
-    
-    // Process remaining potential outposts (value is less than occupied outposts)
+    // Process remaining outposts more efficiently with lookup tables
     while (remainingOutposts) {
         Square sq = static_cast<Square>(pop_lsb(remainingOutposts));
         int rank = square_rank(sq);
         int file = square_file(sq);
         
-        int outpostValue = 4; // Base value for potential outpost
+        int outpostValue = 4; // Base value
         
-        // Rank adjustments
+        // Use relative rank consistently
         rank = (color == White) ? rank : 7 - rank;
-        if (rank >= 4) {
-            outpostValue += (rank - 3) * 2;
-        }
+        outpostValue += (rank >= 4) ? ((rank - 3) * 2) : 0;
         
-        // Central squares bonus
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                outpostValue += 3;
-            } else {
-                outpostValue += 2;
-            }
-        }
-        
-        // Check if it's near enemy king for minor bonus
-        int distance = square_distance(sq, enemyKing);
-        if (distance <= 3) {
+        // Use precomputed masks for center regions
+        if (centerMask & (1ULL << sq)) {
+            outpostValue += 3;
+        } else if (extendedCenterMask & (1ULL << sq)) {
             outpostValue += 2;
         }
         
-        // Integrate with killer moves for tactically important squares
+        // Enemy king proximity bonus
+        outpostValue += (square_distance(sq, enemyKing) <= 3) ? 2 : 0;
+        
+        // Check killer moves for tactical importance (simplified loop)
         for (int ply = 0; ply < std::min(MAX_PLY, 10); ++ply) {
             if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
                 outpostValue += 3;
@@ -754,53 +736,27 @@ int evaluateHolesAndOutposts(const PawnStructureContext &ctx, Color color) {
     }
     
     // Evaluate holes in our position (squares that cannot be defended by our pawns)
-    Bitboard ourPawnAttacks = 0;
-    tempPawns = ourPawns;
-    while (tempPawns) {
-        Square sq = static_cast<Square>(pop_lsb(tempPawns));
-        ourPawnAttacks |= PawnAttacks(sq, color);
-    }
-    
-    // Holes are squares on our half that can't be defended by pawns
+    // Use our half of the board based on color
     Bitboard ourHalf = (color == White) ? 
         (MASK_RANK[2] | MASK_RANK[3] | MASK_RANK[4]) :
         (MASK_RANK[3] | MASK_RANK[4] | MASK_RANK[5]);
     
+    // Holes: squares on our half that can't be defended by pawns and are empty
     Bitboard holes = ~ourPawnAttacks & ourHalf & ~allPieces;
     
-    // Penalize holes that enemy minor pieces could use
-    Bitboard enemyKnights = ctx.board.pieces(KNIGHT, opponent);
-    Bitboard enemyBishops = ctx.board.pieces(BISHOP, opponent);
+    // Penalize important holes more efficiently
+    Bitboard centralHoles = holes & centerMask;
+    Bitboard extendedCentralHoles = holes & extendedCenterMask;
     
-    // Calculate potential knight outposts for enemy
-    while (holes) {
-        Square sq = static_cast<Square>(pop_lsb(holes));
-        int rank = square_rank(sq);
-        int file = square_file(sq);
-        
-        // Only penalize strategically important holes
-        if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
-            int holePenalty = 3;
-            
-            // Central holes are worse
-            if ((file == 3 || file == 4) && (rank == 3 || rank == 4)) {
-                holePenalty = 5;
-            }
-            
-            // Check if enemy knights can reach this hole
-            Bitboard enemyKnightMoves = 0;
-            Bitboard tempKnights = enemyKnights;
-            while (tempKnights) {
-                Square knightSq = static_cast<Square>(pop_lsb(tempKnights));
-                if (KnightAttacks(knightSq) & (1ULL << sq)) {
-                    holePenalty += 2;
-                    break;
-                }
-            }
-            
-            // Apply the penalty
-            bonus -= holePenalty;
-        }
+    // Apply fixed penalty for central holes (avoid looping again)
+    bonus -= popcount(centralHoles) * 5;
+    bonus -= popcount(extendedCentralHoles) * 3;
+    
+    // Check if enemy knights can reach these holes (simplified)
+    if (ctx.board.pieces(KNIGHT, opponent)) {
+        // Knights are the most threatening piece for holes
+        // This is a simplification - we're not checking individual knight moves
+        bonus -= popcount(centralHoles) * 2;
     }
     
     return bonus;
