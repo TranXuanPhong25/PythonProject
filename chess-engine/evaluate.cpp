@@ -125,6 +125,9 @@ int evaluate(const Board &board)
     // King mobility (both phases)
     score += (board.sideToMove == White ? evaluateKingMobility(board, White) : -evaluateKingMobility(board, Black));
 
+    // King checkmate potential (both phases)
+    score += (board.sideToMove == White ? evaluateQueenControlAndCheckmatePotential(board, White) : -evaluateQueenControlAndCheckmatePotential(board, Black));
+
     // Return score from perspective of side to move
     return board.sideToMove == White ? score : -score;
 }

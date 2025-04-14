@@ -894,80 +894,77 @@ int evaluateQueenControlAndCheckmatePotential(const Board &board, Color color) {
     int score = 0;
     Color opponent = ~color;
     
-    // Lấy vị trí các quân quan trọng
     Bitboard ourQueens = board.pieces(QUEEN, color);
-    if (!ourQueens) return 0; // Thoát sớm
+    if (!ourQueens) return 0; // Early exit if no queens
     
     Bitboard enemyKing = board.pieces(KING, opponent);
     Square enemyKingSq = board.KingSQ(opponent);
     
-    // Tạo bản sao mutable để tránh vấn đề const
     Board &mutableBoard = const_cast<Board &>(board);
     
-    // Lưu trữ các giá trị sử dụng nhiều lần
     Bitboard allPieces = board.All();
     Bitboard ourPieces = board.Us(color);
     Bitboard enemyPieces = board.Enemy(color);
     
-    // Tính toán kingAttacks một lần
+    // Calculate the king's attacks and zone
     Bitboard kingAttacks = KingAttacks(enemyKingSq);
     Bitboard kingZone = kingAttacks | (1ULL << enemyKingSq);
     
-    // Lưu trữ các ô trung tâm
+    // Store the center squares (D4, E4, D5, E5)
     Bitboard centerSquares = (1ULL << SQ_D4) | (1ULL << SQ_E4) | (1ULL << SQ_D5) | (1ULL << SQ_E5);
     
-    // Đánh giá từng quân hậu
+    // Analyze each queen
     while (ourQueens) {
         Square queenSq = static_cast<Square>(pop_lsb(ourQueens));
         
-        // 1. Đánh giá khả năng kiểm soát của quân hậu
+        // 1. Queen's control over the board
         Bitboard queenAttacks = QueenAttacks(queenSq, allPieces) & ~ourPieces;
         
-        // 2-3. Đánh giá khả năng tấn công
+        // 2-3. Queen's attack on enemy pieces
         int attackBonus = 0;
-        attackBonus += popcount(queenAttacks & enemyPieces) * 5;          // Tấn công quân đối phương
-        attackBonus += popcount(queenAttacks & kingZone) * 10;            // Tấn công vùng quanh vua
-        attackBonus += ((queenAttacks & centerSquares) ? 15 : 0);         // Kiểm soát trung tâm
-        score += popcount(queenAttacks) * 2 + attackBonus;                // Điểm cơ bản + tấn công
+        attackBonus += popcount(queenAttacks & enemyPieces) * 5;          // Attack enemy pieces
+        attackBonus += popcount(queenAttacks & kingZone) * 10;            // Attack enemy king zone
+        attackBonus += ((queenAttacks & centerSquares) ? 15 : 0);         // Center control bonus
+        score += popcount(queenAttacks) * 2 + attackBonus;                // Basic attack bonus
         
-        // 4. Đánh giá chiếu hết tiềm năng
+        // 4. Analyze checkmate potential
         int distance = square_distance(queenSq, enemyKingSq);
         if (distance <= 2) {
-            score += (3 - distance) * 15; // Càng gần càng tốt
+            score += (3 - distance) * 15; // Closer to the enemy king = more potential
             
-            // Kiểm tra nếu quân hậu đang tấn công vua
+            // Check if the queen attacks the enemy king
             if (queenAttacks & enemyKing) {
                 score += 30;
                 
-                // Kiểm tra nếu vua đối phương không có nước đi hợp lệ
+                // Check if the enemy king has any legal moves
                 Bitboard kingMoves = kingAttacks & ~board.Us(opponent);
                 
-                // Kiểm tra từng ô di chuyển có thể của vua đối phương
+                // Check if the enemy king has any safe moves
                 Bitboard safeKingMoves = kingMoves;
                 Bitboard tempKingMoves = kingMoves;
                 
                 while (tempKingMoves) {
                     Square kingMoveSq = static_cast<Square>(pop_lsb(tempKingMoves));
                     
-                    // Nếu ô này bị tấn công bởi bất kỳ quân nào của bên ta
+                    // Check if the move is attacked by our pieces
                     if (mutableBoard.attackersForSide(color, kingMoveSq, allPieces)) {
                         safeKingMoves &= ~(1ULL << kingMoveSq);
                     }
                 }
                 
-                // Nếu vua không còn nước đi an toàn và đang bị tấn công
+                // Check if the enemy king has no any safe moves
                 if (safeKingMoves == 0 && mutableBoard.attackersForSide(color, enemyKingSq, allPieces)) {
-                    score += 200; // Rất có khả năng chiếu hết
+                    score += 200; // Checkmate potential bonus
                 }
             }
         }
         
-        // 6. Ưu tiên quân hậu an toàn (không bị tấn công)
+        // Priority for the queen's safety
         if (!mutableBoard.attackersForSide(opponent, queenSq, allPieces)) {
             score += 10;
         }
         
-        // 7-8. Kiểm tra killer moves và history table
+        // Check killer moves + History heuristic
         int side = (color == White) ? 0 : 1;
         bool killerBonus = false;
         
