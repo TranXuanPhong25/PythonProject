@@ -2,57 +2,226 @@
 
 using namespace Chess;
 
+// Constructor implementation for PawnStructureContext
+PawnStructureContext::PawnStructureContext(const Board& b) : board(b) {
+    // Initialize bitboards
+    whitePawns = board.pieces(PAWN, White);
+    blackPawns = board.pieces(PAWN, Black);
+    
+    // Calculate pawn attacks
+    whitePawnAttacks = 0ULL;
+    blackPawnAttacks = 0ULL;
+    
+    // King positions
+    whiteKingSq = board.KingSQ(White);
+    blackKingSq = board.KingSQ(Black);
+    
+    // Calculate game phase
+    gamePhase = getGamePhase(board);
+    
+    // Initialize file-based and rank-based bitboards
+    for (int file = 0; file < 8; ++file) {
+        whitePawnsOnFile[file] = whitePawns & MASK_FILE[file];
+        blackPawnsOnFile[file] = blackPawns & MASK_FILE[file];
+    }
+    
+    for (int rank = 0; rank < 8; ++rank) {
+        whitePawnsOnRank[rank] = whitePawns & MASK_RANK[rank];
+        blackPawnsOnRank[rank] = blackPawns & MASK_RANK[rank];
+    }
+    
+    // Calculate pawn attacks
+    Bitboard tempWhitePawns = whitePawns;
+    while (tempWhitePawns) {
+        Square sq = static_cast<Square>(pop_lsb(tempWhitePawns));
+        whitePawnAttacks |= PawnAttacks(sq, White);
+    }
+    
+    Bitboard tempBlackPawns = blackPawns;
+    while (tempBlackPawns) {
+        Square sq = static_cast<Square>(pop_lsb(tempBlackPawns));
+        blackPawnAttacks |= PawnAttacks(sq, Black);
+    }
+}
+
+// Helper method implementations
+bool PawnStructureContext::isPassed(Square sq, Color color) const {
+    int file = square_file(sq);
+    int rank = square_rank(sq);
+    
+    // Create a mask for files (current, left, and right)
+    Bitboard fileMask = MASK_FILE[file];
+    if (file > 0) fileMask |= MASK_FILE[file - 1];
+    if (file < 7) fileMask |= MASK_FILE[file + 1];
+    
+    // Create a mask for ranks ahead of the pawn
+    Bitboard rankMask = 0ULL;
+    if (color == White) {
+        for (int r = rank + 1; r <= 7; ++r)
+            rankMask |= MASK_RANK[r];
+    } else {
+        for (int r = rank - 1; r >= 0; --r)
+            rankMask |= MASK_RANK[r];
+    }
+    
+    // Check if there are enemy pawns in the blocking zone
+    Bitboard blockerZone = fileMask & rankMask;
+    Bitboard enemyPawns = (color == White) ? blackPawns : whitePawns;
+    
+    return (blockerZone & enemyPawns) == 0;
+}
+
+bool PawnStructureContext::isIsolated(Square sq, Color color) const {
+    int file = square_file(sq);
+    Bitboard friendlyPawns = (color == White) ? whitePawns : blackPawns;
+    
+    // Check pawns on adjacent files
+    Bitboard leftSupport = (file > 0) ? (friendlyPawns & MASK_FILE[file - 1]) : 0;
+    Bitboard rightSupport = (file < 7) ? (friendlyPawns & MASK_FILE[file + 1]) : 0;
+    
+    return !leftSupport && !rightSupport;
+}
+
+bool PawnStructureContext::isDoubled(Square sq, Color color) const {
+    int file = square_file(sq);
+    Bitboard pawnsInFile = (color == White) ? whitePawnsOnFile[file] : blackPawnsOnFile[file];
+    
+    return popcount(pawnsInFile) > 1;
+}
+
+bool PawnStructureContext::isConnected(Square sq, Color color) const {
+    int file = square_file(sq);
+    int rank = square_rank(sq);
+    Bitboard friendlyPawns = (color == White) ? whitePawns : blackPawns;
+    
+    // Check for connected pawns (side by side)
+    Bitboard connected = 0ULL;
+    if (file > 0)
+        connected |= 1ULL << (rank * 8 + file - 1);
+    if (file < 7)
+        connected |= 1ULL << (rank * 8 + file + 1);
+    
+    return (connected & friendlyPawns) != 0;
+}
+
+bool PawnStructureContext::isPhalanx(Square sq, Color color) const {
+    int file = square_file(sq);
+    int rank = square_rank(sq);
+    Bitboard friendlyPawns = (color == White) ? whitePawns : blackPawns;
+    
+    // Check for phalanx formation (adjacent pawns in the same rank)
+    Bitboard phalanx = 0ULL;
+    if (file > 0)
+        phalanx |= 1ULL << (rank * 8 + file - 1);
+    if (file < 7)
+        phalanx |= 1ULL << (rank * 8 + file + 1);
+    
+    return (phalanx & friendlyPawns) != 0;
+}
+
+bool PawnStructureContext::isBackward(Square sq, Color color) const {
+    int file = square_file(sq);
+    int rank = square_rank(sq);
+    
+    // The square in front of the pawn
+    int frontRank = (color == White) ? rank + 1 : rank - 1;
+    if (frontRank < 0 || frontRank >= 8) return false;
+    
+    Square frontSquare = file_rank_square(File(file), Rank(frontRank));
+    bool blocked = board.pieceAtB(frontSquare) != None; // Check if blocked
+    
+    // Check if the pawn is blocked by an enemy pawn
+    Bitboard enemyAttacks = (color == White) ? blackPawnAttacks : whitePawnAttacks;
+    bool controlled = enemyAttacks & (1ULL << frontSquare);
+    
+    // Check if the pawn is supported by another pawn
+    bool supported = false;
+    for (int df = -1; df <= 1; df += 2) {
+        int adjFile = file + df;
+        if (adjFile >= 0 && adjFile < 8) {
+            Square supportSq = file_rank_square(File(adjFile), Rank(rank));
+            if (board.pieceAtB(supportSq) == makePiece(PAWN, color)) {
+                supported = true;
+                break;
+            }
+        }
+    }
+    
+    // If the pawn is blocked or controlled by an enemy pawn and not supported, it's backward
+    return !supported && (blocked || controlled);
+}
+
+bool PawnStructureContext::isShieldingKing(Square sq, Color color) const {
+    int kingFile = square_file(color == White ? whiteKingSq : blackKingSq);
+    int kingRank = square_rank(color == White ? whiteKingSq : blackKingSq);
+    int pawnFile = square_file(sq);
+    int pawnRank = square_rank(sq);
+    
+    // Check if pawn is in front of the king
+    if (abs(kingFile - pawnFile) <= 1) {
+        if (color == White && pawnRank == kingRank + 1) {
+            return true;
+        } else if (color == Black && pawnRank == kingRank - 1) {
+            return true;
+        }
+    }
+    
+    return false;
+}
 
 // Pawn Structure: isolated, doubled, passed pawns (basic skeleton)
 int evaluatePawnStructure(const Board &board) {
+    // Create a context object for pawn structure evaluation
+    PawnStructureContext ctx(board);
+    
     int score = 0;
-    score -= evaluateDoubledPawns(board, White);
-    score += evaluateDoubledPawns(board, Black);
+    score -= evaluateDoubledPawns(ctx, White);
+    score += evaluateDoubledPawns(ctx, Black);
 
-    score -= evaluateIsolatedPawns(board, White);
-    score += evaluateIsolatedPawns(board, Black);
+    score -= evaluateIsolatedPawns(ctx, White);
+    score += evaluateIsolatedPawns(ctx, Black);
 
-    score += evaluatePassedPawns(board, White);
-    score -= evaluatePassedPawns(board, Black);
+    score += evaluatePassedPawns(ctx, White);
+    score -= evaluatePassedPawns(ctx, Black);
 
-    score += evaluatePassedPawnSupport(board, White);
-    score -= evaluatePassedPawnSupport(board, Black);
+    score += evaluatePassedPawnSupport(ctx, White);
+    score -= evaluatePassedPawnSupport(ctx, Black);
 
-    score += evaluateConnectedPawns(board, White);
-    score -= evaluateConnectedPawns(board, Black);
+    score += evaluateConnectedPawns(ctx, White);
+    score -= evaluateConnectedPawns(ctx, Black);
 
-    score += evaluatePhalanxPawns(board, White);
-    score -= evaluatePhalanxPawns(board, Black);
+    score += evaluatePhalanxPawns(ctx, White);
+    score -= evaluatePhalanxPawns(ctx, Black);
 
-    score += evaluateBlockedPawns(board, White);
-    score -= evaluateBlockedPawns(board, Black);
+    score += evaluateBlockedPawns(ctx, White);
+    score -= evaluateBlockedPawns(ctx, Black);
 
-    score += evaluatePawnChains(board, White);
-    score -= evaluatePawnChains(board, Black);
+    score += evaluatePawnChains(ctx, White);
+    score -= evaluatePawnChains(ctx, Black);
 
-    score += evaluatePawnShield(board, White);
-    score -= evaluatePawnShield(board, Black);
+    score += evaluatePawnShield(ctx, White);
+    score -= evaluatePawnShield(ctx, Black);
 
-    score += evaluateBackwardPawns(board, White);
-    score -= evaluateBackwardPawns(board, Black);
+    score += evaluateBackwardPawns(ctx, White);
+    score -= evaluateBackwardPawns(ctx, Black);
 
-    score += evaluateHolesAndOutposts(board, White);
-    score -= evaluateHolesAndOutposts(board, Black);
+    score += evaluateHolesAndOutposts(ctx, White);
+    score -= evaluateHolesAndOutposts(ctx, Black);
 
-    score += evaluatePawnLeverThreats(board, White);
-    score -= evaluatePawnLeverThreats(board, Black);
+    score += evaluatePawnLeverThreats(ctx, White);
+    score -= evaluatePawnLeverThreats(ctx, Black);
 
-    score += evaluateFileOpenness(board, White);
-    score -= evaluateFileOpenness(board, Black);
+    score += evaluateFileOpenness(ctx, White);
+    score -= evaluateFileOpenness(ctx, Black);
 
-    score += evaluateSpaceAdvantage(board, White);
-    score -= evaluateSpaceAdvantage(board, Black);
+    score += evaluateSpaceAdvantage(ctx, White);
+    score -= evaluateSpaceAdvantage(ctx, Black);
 
-    score += evaluatePawnMajority(board, White);
-    score -= evaluatePawnMajority(board, Black);
+    score += evaluatePawnMajority(ctx, White);
+    score -= evaluatePawnMajority(ctx, Black);
 
-    score += evaluatePawnStorm(board, White);
-    score -= evaluatePawnStorm(board, Black);
+    score += evaluatePawnStorm(ctx, White);
+    score -= evaluatePawnStorm(ctx, Black);
 
     return score;
 }
@@ -84,10 +253,10 @@ int evaluateCenterControl(const Board& board) {
 }
 
 
-int evaluateDoubledPawns(const Board &board, Color color) {
+int evaluateDoubledPawns(const PawnStructureContext &ctx, Color color) {
     int penalty = 0;
     // Get all pawns of the specified color
-    Bitboard pawns = board.pieces(PAWN, color);
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
 
     // Iterate through each file (0 to 7)
     for (int file = 0; file < 8; ++file) {
@@ -105,8 +274,8 @@ int evaluateDoubledPawns(const Board &board, Color color) {
 }
 
 
-int evaluateIsolatedPawns(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
+int evaluateIsolatedPawns(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     int penalty = 0;
 
     // Iterate through each file (0 to 7)
@@ -125,59 +294,44 @@ int evaluateIsolatedPawns(const Board &board, Color color) {
     return penalty;
 }
 
-
-int evaluatePassedPawns(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
-    Bitboard enemyPawns = board.pieces(PAWN, ~color);
+// Efficiently evaluate passed pawns using the context
+int evaluatePassedPawns(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
-
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
+    
+    // Reuse the precomputed values from context
     while (pawns) {
         Square sq = static_cast<Square>(pop_lsb(pawns));
-        int file = square_file(sq);
-        int rank = square_rank(sq);
         
-        Bitboard blockerZone = 0;
-
-        for (int df = -1; df <= 1; ++df) {
-            int f = file + df;
-            if (f < 0 || f > 7) continue;
-
-            if (color == White) {
-                for (int r = rank + 1; r <= 7; ++r)
-                    blockerZone |= (1ULL << (r * 8 + f));
-            } else {
-                for (int r = rank - 1; r >= 0; --r)
-                    blockerZone |= (1ULL << (r * 8 + f));
-            }
-        }
-
-        if ((blockerZone & enemyPawns) == 0) {
+        // Use the helper method in context
+        if (ctx.isPassed(sq, color)) {
+            int rank = square_rank(sq);
             int advancement = (color == White) ? rank : (7 - rank);
-            bonus += advancement * 5 + 10;
-
-            // Bonus point for queens-pawn
-            if (advancement >= 5)
-                bonus += 10;
-                
-            // Check if the pawn is part of a killer move
-            for (int ply = 0; ply < MAX_PLY; ++ply) {
-                if (killerMoves[ply][0] == sq || killerMoves[ply][1] == sq) {
-                    bonus += 20; // Bonus if part of a killer move
-                    break;
-                }
+            
+            // Apply bonus based on advancement with game phase consideration
+            int baseBonus = advancement * 5 + 10;
+            
+            // Apply more bonus in endgame for passed pawns
+            int phaseAdjustedBonus = static_cast<int>(baseBonus * (1.0 + ctx.gamePhase));
+            
+            // Extra bonus for advanced passed pawns
+            if (advancement >= 5) {
+                phaseAdjustedBonus += 10;
             }
+            
+            bonus += phaseAdjustedBonus;
         }
     }
-
+    
     return bonus;
 }
 
-int evaluatePassedPawnSupport(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
+int evaluatePassedPawnSupport(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     int bonus = 0;
 
     // Create a mutable copy of the board to avoid const issues
-    Board &mutableBoard = const_cast<Board &>(board);
+    Board &mutableBoard = const_cast<Board &>(ctx.board);
 
     while (pawns) {
         Square sq = static_cast<Square>(pop_lsb(pawns));
@@ -216,8 +370,8 @@ int evaluatePassedPawnSupport(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluateConnectedPawns(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
+int evaluateConnectedPawns(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     int bonus = 0;
 
     while (pawns) {
@@ -239,7 +393,7 @@ int evaluateConnectedPawns(const Board &board, Color color) {
         if (file < 7)
             connected |= 1ULL << (rank * 8 + file + 1);
 
-        if (connected & board.pieces(PAWN, color)) {
+        if (connected & ctx.board.pieces(PAWN, color)) {
             bonus += 12; // Bonus for connected pawns
 
             // // Check if the pawn is part of a historical good move
@@ -253,8 +407,8 @@ int evaluateConnectedPawns(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluatePhalanxPawns(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
+int evaluatePhalanxPawns(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     int bonus = 0;
 
     for (int rank = 0; rank < 8; ++rank) {
@@ -276,8 +430,8 @@ int evaluatePhalanxPawns(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluateBlockedPawns(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
+int evaluateBlockedPawns(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     int penalty = 0;
 
     while (pawns) {
@@ -294,8 +448,8 @@ int evaluateBlockedPawns(const Board &board, Color color) {
     return penalty;
 }
 
-int evaluatePawnChains(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
+int evaluatePawnChains(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     int bonus = 0;
 
     while (pawns) {
@@ -318,7 +472,7 @@ int evaluatePawnChains(const Board &board, Color color) {
         }
 
         // Bonus for each pawn in the chain
-        if (protectors & board.pieces(PAWN, color)) {
+        if (protectors & ctx.board.pieces(PAWN, color)) {
             bonus += 15;
         }
     }
@@ -326,10 +480,10 @@ int evaluatePawnChains(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluatePawnShield(const Board &board, Color color) {
+int evaluatePawnShield(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
 
-    Square kingSquare = board.KingSQ(color);
+    Square kingSquare = ctx.board.KingSQ(color);
     int kingRank = square_rank(kingSquare);
     int kingFile = square_file(kingSquare);
 
@@ -340,7 +494,7 @@ int evaluatePawnShield(const Board &board, Color color) {
             int shieldFile = kingFile + df;
             if (shieldFile >= 0 && shieldFile < 8) {
                 Square shieldSquare = file_rank_square(File(shieldFile), Rank(shieldRank));
-                if (board.pieceAtB(shieldSquare) == makePiece(PAWN, color)) {
+                if (ctx.board.pieceAtB(shieldSquare) == makePiece(PAWN, color)) {
                     int center_bonus = (shieldFile == 3 || shieldFile == 4) ? 12 : 10;
                     bonus += center_bonus;
 
@@ -366,9 +520,9 @@ int evaluatePawnShield(const Board &board, Color color) {
 }
 
 
-int evaluateBackwardPawns(const Board &board, Color color) {
-    Bitboard pawns = board.pieces(PAWN, color);
-    Bitboard enemyPawns = board.pieces(PAWN, ~color);
+int evaluateBackwardPawns(const PawnStructureContext &ctx, Color color) {
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
+    Bitboard enemyPawns = (color == White) ? ctx.blackPawns : ctx.whitePawns;
     int penalty = 0;
 
     while (pawns) {
@@ -381,7 +535,7 @@ int evaluateBackwardPawns(const Board &board, Color color) {
         if (frontRank < 0 || frontRank >= 8) continue;
 
         Square frontSquare = file_rank_square(File(file), Rank(frontRank));
-        bool blocked = board.pieceAtB(frontSquare) != None; // Check if blocked
+        bool blocked = ctx.board.pieceAtB(frontSquare) != None; // Check if blocked
 
         // Check if the pawn is blocked by an enemy pawn
         Bitboard enemyAttacks = PawnAttacks(sq, ~color);
@@ -393,7 +547,7 @@ int evaluateBackwardPawns(const Board &board, Color color) {
             int adjFile = file + df;
             if (adjFile >= 0 && adjFile < 8) {
                 Square supportSq = file_rank_square(File(adjFile), Rank(rank));
-                if (board.pieceAtB(supportSq) == makePiece(PAWN, color)) {
+                if (ctx.board.pieceAtB(supportSq) == makePiece(PAWN, color)) {
                     supported = true;
                     break;
                 }
@@ -409,17 +563,17 @@ int evaluateBackwardPawns(const Board &board, Color color) {
     return penalty;
 }
 
-int evaluateHolesAndOutposts(const Board &board, Color color) {
+int evaluateHolesAndOutposts(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
     Color opponent = ~color;
     
     // Get important bitboards
-    Bitboard ourPawns = board.pieces(PAWN, color);
-    Bitboard enemyPawns = board.pieces(PAWN, opponent);
-    Bitboard ourKnights = board.pieces(KNIGHT, color);
-    Bitboard ourBishops = board.pieces(BISHOP, color);
-    Bitboard ourRooks = board.pieces(ROOK, color);
-    Bitboard allPieces = board.All();
+    Bitboard ourPawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
+    Bitboard enemyPawns = (color == White) ? ctx.blackPawns : ctx.whitePawns;
+    Bitboard ourKnights = ctx.board.pieces(KNIGHT, color);
+    Bitboard ourBishops = ctx.board.pieces(BISHOP, color);
+    Bitboard ourRooks = ctx.board.pieces(ROOK, color);
+    Bitboard allPieces = ctx.board.All();
     
     // Calculate squares not attacked by enemy pawns (potential outposts)
     Bitboard enemyPawnAttacks = 0;
@@ -451,7 +605,7 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
     const int sixthRankValue = 15;     // 6th rank for white, 3rd for black
     
     // Get enemy king position for proximity bonus
-    Square enemyKing = board.KingSQ(opponent);
+    Square enemyKing = ctx.board.KingSQ(opponent);
     
     // Check actual piece placement on outposts
     Bitboard outpostKnights = ourKnights & strongOutposts;
@@ -490,12 +644,12 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
         
         // Consider piece activity from the outpost
         Bitboard knightAttacks = KnightAttacks(sq);
-        int attackCount = popcount(knightAttacks & board.occEnemy);
+        int attackCount = popcount(knightAttacks & ctx.board.occEnemy);
         outpostValue += attackCount * 6;
         
         // History heuristic integration
         int side = (color == White) ? 0 : 1;
-        int historyScore = historyTable[side][board.KingSQ(color)][sq];
+        int historyScore = historyTable[side][ctx.board.KingSQ(color)][sq];
         outpostValue += std::min(10, historyScore / 100);
         
         bonus += outpostValue;
@@ -528,7 +682,7 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
         
         // Evaluate bishop's diagonal influence
         Bitboard bishopAttacks = BishopAttacks(sq, allPieces);
-        int attackCount = popcount(bishopAttacks & board.occEnemy);
+        int attackCount = popcount(bishopAttacks & ctx.board.occEnemy);
         outpostValue += attackCount * 4;
         
         bonus += outpostValue;
@@ -545,7 +699,7 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
             
             // Extra bonus for rook attacking pawns on 7th
             Bitboard rookAttacks = RookAttacks(sq, allPieces);
-            int pawnsAttacked = popcount(rookAttacks & board.pieces(PAWN, opponent));
+            int pawnsAttacked = popcount(rookAttacks & ctx.board.pieces(PAWN, opponent));
             bonus += pawnsAttacked * 8;
         }
         else {
@@ -615,8 +769,8 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
     Bitboard holes = ~ourPawnAttacks & ourHalf & ~allPieces;
     
     // Penalize holes that enemy minor pieces could use
-    Bitboard enemyKnights = board.pieces(KNIGHT, opponent);
-    Bitboard enemyBishops = board.pieces(BISHOP, opponent);
+    Bitboard enemyKnights = ctx.board.pieces(KNIGHT, opponent);
+    Bitboard enemyBishops = ctx.board.pieces(BISHOP, opponent);
     
     // Calculate potential knight outposts for enemy
     while (holes) {
@@ -652,25 +806,25 @@ int evaluateHolesAndOutposts(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluatePawnLeverThreats(const Board &board, Color color) {
+int evaluatePawnLeverThreats(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
 
-    Bitboard pawns = board.pieces(PAWN, color);
-    Bitboard enemyPawns = board.pieces(PAWN, ~color);
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
+    Bitboard enemyPawns = (color == White) ? ctx.blackPawns : ctx.whitePawns;
 
     // Create a mutable copy of the board to avoid const issues
-    Board &mutableBoard = const_cast<Board &>(board);
+    Board &mutableBoard = const_cast<Board &>(ctx.board);
 
     while (pawns) {
         Square from = static_cast<Square>(pop_lsb(pawns));
 
         // Check if the pawn is supported by another pawn
-        if (PawnAttacks(from, color) & board.pieces(PAWN, color)) {
+        if (PawnAttacks(from, color) & ctx.board.pieces(PAWN, color)) {
             bonus += 5; 
         }
 
         // Check if the pawn is attacked and not supported
-        if (!(PawnAttacks(from, color) & board.pieces(PAWN, color)) &&
+        if (!(PawnAttacks(from, color) & ctx.board.pieces(PAWN, color)) &&
             mutableBoard.attackersForSide(~color, from, mutableBoard.All())) {
             bonus -= 3; // Penalty for being attacked without support
         }
@@ -704,12 +858,12 @@ int evaluatePawnLeverThreats(const Board &board, Color color) {
 
             // Check history move
             int side = (color == White) ? 0 : 1;
-            if (historyTable[side][board.KingSQ(color)][target] > 0) {
+            if (historyTable[side][ctx.board.KingSQ(color)][target] > 0) {
                 bonus += 5;
             }
 
             // Calculate point follow MVV-LVA
-            Piece victim = board.pieceAtB(target);
+            Piece victim = ctx.board.pieceAtB(target);
             if (victim != None && victim != PAWN) {
                 bonus += mvv_lva[PAWN][victim];
             }
@@ -719,17 +873,17 @@ int evaluatePawnLeverThreats(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluateFileOpenness(const Board &board, Color color) {
+int evaluateFileOpenness(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
 
     for (int file = 0; file < 8; ++file) {
         Bitboard fileMask = MASK_FILE[file];
-        Bitboard pawnsInFile = board.pieces(PAWN, color) & fileMask;
-        Bitboard enemyPawnsInFile = board.pieces(PAWN, ~color) & fileMask;
+        Bitboard pawnsInFile = ctx.board.pieces(PAWN, color) & fileMask;
+        Bitboard enemyPawnsInFile = ctx.board.pieces(PAWN, ~color) & fileMask;
 
         // Get all rooks and queens in the file
-        Bitboard rooks = board.pieces(ROOK, color) & fileMask;
-        Bitboard queens = board.pieces(QUEEN, color) & fileMask;
+        Bitboard rooks = ctx.board.pieces(ROOK, color) & fileMask;
+        Bitboard queens = ctx.board.pieces(QUEEN, color) & fileMask;
 
         // Check OpenFile
         if (!pawnsInFile && !enemyPawnsInFile) {
@@ -776,7 +930,7 @@ int evaluateFileOpenness(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluateSpaceAdvantage(const Board &board, Color color) {
+int evaluateSpaceAdvantage(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
 
     // Identify the opponent's half of the board
@@ -789,7 +943,7 @@ int evaluateSpaceAdvantage(const Board &board, Color color) {
     // Calculate all pieces on the board
     Bitboard allPieces = 0ULL;
     for (int sq = 0; sq < 64; ++sq) {
-        if (board.pieceAtB(static_cast<Square>(sq)) != None) {
+        if (ctx.board.pieceAtB(static_cast<Square>(sq)) != None) {
             allPieces |= (1ULL << sq);
         }
     }
@@ -799,7 +953,7 @@ int evaluateSpaceAdvantage(const Board &board, Color color) {
     Bitboard controlledSquares = 0ULL;
     for (int sq = 0; sq < 64; ++sq) {
         Square square = static_cast<Square>(sq);
-        if (board.pieceAtB(square) == makePiece(PAWN, color)) {
+        if (ctx.board.pieceAtB(square) == makePiece(PAWN, color)) {
             controlledSquares |= PawnAttacks(square, color);
         }
     }
@@ -821,7 +975,7 @@ int evaluateSpaceAdvantage(const Board &board, Color color) {
     // Integrated historyTable
     int side = (color == White) ? 0 : 1;
     for (int sq = 0; sq < 64; ++sq) {
-        if (controlledSquares & (1ULL << sq) && historyTable[side][board.KingSQ(color)][sq] > 0) {
+        if (controlledSquares & (1ULL << sq) && historyTable[side][ctx.board.KingSQ(color)][sq] > 0) {
             bonus += 3; 
         }
     }
@@ -829,7 +983,7 @@ int evaluateSpaceAdvantage(const Board &board, Color color) {
     // Integrated MVV-LVA
     for (int sq = 0; sq < 64; ++sq) {
         if (controlledSquares & (1ULL << sq)) {
-            Piece victim = board.pieceAtB(static_cast<Square>(sq));
+            Piece victim = ctx.board.pieceAtB(static_cast<Square>(sq));
             if (victim != None && victim != PAWN) {
                 bonus += mvv_lva[PAWN][victim];
             }
@@ -839,11 +993,11 @@ int evaluateSpaceAdvantage(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluatePawnMajority(const Board &board, Color color) {
+int evaluatePawnMajority(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
 
     // Identify the pawns in king side and queen side
-    Bitboard pawns = board.pieces(PAWN, color);
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
     Bitboard kingSide = MASK_FILE[5] | MASK_FILE[6] | MASK_FILE[7]; // Cột f, g, h
     Bitboard queenSide = MASK_FILE[0] | MASK_FILE[1] | MASK_FILE[2]; // Cột a, b, c
 
@@ -867,7 +1021,7 @@ int evaluatePawnMajority(const Board &board, Color color) {
 
         // Penalty for pawns on the 2nd rank or lower
         Square frontSquare = (color == White) ? static_cast<Square>(sq + 8) : static_cast<Square>(sq - 8);
-        if (board.pieceAtB(frontSquare) != None) {
+        if (ctx.board.pieceAtB(frontSquare) != None) {
             bonus -= 5; // Phạt nếu quân tốt bị cản trở
         }
     }
@@ -883,7 +1037,7 @@ int evaluatePawnMajority(const Board &board, Color color) {
     // Integrate historyTable
     int side = (color == White) ? 0 : 1;
     for (int sq = 0; sq < 64; ++sq) {
-        if (pawns & (1ULL << sq) && historyTable[side][board.KingSQ(color)][sq] > 0) {
+        if (pawns & (1ULL << sq) && historyTable[side][ctx.board.KingSQ(color)][sq] > 0) {
             bonus += 3; 
         }
     }
@@ -891,15 +1045,15 @@ int evaluatePawnMajority(const Board &board, Color color) {
     return bonus;
 }
 
-int evaluatePawnStorm(const Board &board, Color color) {
+int evaluatePawnStorm(const PawnStructureContext &ctx, Color color) {
     int bonus = 0;
 
     // Identify the opponent's king square
-    Square enemyKingSquare = board.KingSQ(~color);
+    Square enemyKingSquare = ctx.board.KingSQ(~color);
     int enemyKingFile = square_file(enemyKingSquare);
 
     // Identify the pawns of the current color
-    Bitboard pawns = board.pieces(PAWN, color);
+    Bitboard pawns = (color == White) ? ctx.whitePawns : ctx.blackPawns;
 
     // Calculate the small distance of each pawn to the opponent's king
     while (pawns) {
@@ -921,7 +1075,7 @@ int evaluatePawnStorm(const Board &board, Color color) {
 
         // Penalty for the blocked pawns
         Square frontSquare = (color == White) ? static_cast<Square>(sq + 8) : static_cast<Square>(sq - 8);
-        if (board.pieceAtB(frontSquare) != None) {
+        if (ctx.board.pieceAtB(frontSquare) != None) {
             bonus -= 5; 
         }
     }
@@ -937,7 +1091,7 @@ int evaluatePawnStorm(const Board &board, Color color) {
     // Integrate historyTable
     int side = (color == White) ? 0 : 1;
     for (int sq = 0; sq < 64; ++sq) {
-        if (pawns & (1ULL << sq) && historyTable[side][board.KingSQ(color)][sq] > 0) {
+        if (pawns & (1ULL << sq) && historyTable[side][ctx.board.KingSQ(color)][sq] > 0) {
             bonus += 3;
         }
     }
@@ -1316,4 +1470,85 @@ int evaluateCastlingAbility(const Board &board, Color color) {
         }
     }
     return score;
+}
+
+// Wrapper functions to maintain backward compatibility
+int evaluateDoubledPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateDoubledPawns(ctx, color);
+}
+
+int evaluateIsolatedPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateIsolatedPawns(ctx, color);
+}
+
+int evaluatePassedPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePassedPawns(ctx, color);
+}
+
+int evaluatePhalanxPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePhalanxPawns(ctx, color);
+}
+
+int evaluatePassedPawnSupport(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePassedPawnSupport(ctx, color);
+}
+
+int evaluateBlockedPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateBlockedPawns(ctx, color);
+}
+
+int evaluatePawnChains(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePawnChains(ctx, color);
+}
+
+int evaluateConnectedPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateConnectedPawns(ctx, color);
+}
+
+int evaluatePawnShield(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePawnShield(ctx, color);
+}
+
+int evaluateBackwardPawns(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateBackwardPawns(ctx, color);
+}
+
+int evaluateHolesAndOutposts(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateHolesAndOutposts(ctx, color);
+}
+
+int evaluatePawnLeverThreats(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePawnLeverThreats(ctx, color);
+}
+
+int evaluateFileOpenness(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateFileOpenness(ctx, color);
+}
+
+int evaluateSpaceAdvantage(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluateSpaceAdvantage(ctx, color);
+}
+
+int evaluatePawnMajority(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePawnMajority(ctx, color);
+}
+
+int evaluatePawnStorm(const Board &board, Color color) {
+    PawnStructureContext ctx(board);
+    return evaluatePawnStorm(ctx, color);
 }
