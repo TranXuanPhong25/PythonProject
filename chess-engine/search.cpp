@@ -1090,16 +1090,16 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
          }
 
          // Adjust window based on failure type
-         if (score <= alpha)
-         {
-            // Failed low - widen below
-            alpha = alpha - windowSize * 3; // More aggressive widening
-         }
-         else
-         { // score >= beta
-            // Failed high - widen above
-            beta = beta + windowSize * 3; // More aggressive widening
-         }
+         if (score <= alpha) {
+            // Failed low - điều chỉnh dựa trên mức độ thất bại
+            int delta = alpha - score;
+            alpha = std::max(-INF_BOUND, alpha - std::max(windowSize, delta + 20));
+          } else { // score >= beta
+            // Failed high - điều chỉnh dựa trên mức độ thất bại
+            int delta = score - beta;
+            beta = std::min(static_cast<int>(INF_BOUND), beta + std::max(windowSize, delta + 20));
+          }
+          
 
          // Triple window size for next attempt - THIS IS THE PROBLEM
          windowSize += 25; // Linear growth to prevent exponential growth
