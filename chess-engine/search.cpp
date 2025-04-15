@@ -708,10 +708,10 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
       // Get history score for this move to use in pruning decisions
       int side = board.sideToMove == White ? 0 : 1;
-      int history_score = historyTable[side][from(move)][to(move)];
+      int historyScore = historyTable[side][from(move)][to(move)];
 
       // Get continuation history score if we have a previous move
-      int continuation_score = 0;
+      int continuationScore = 0;
       if (lastMove != NO_MOVE)
       {
          Piece lastPiece = board.pieceAtB(to(lastMove));
@@ -721,16 +721,16 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
          if (lastPiece != None && currPiece != None)
          {
-            continuation_score = continuationHistory[lastPiece][lastTo][currPiece][currTo];
+            continuationScore = continuationHistory[lastPiece][lastTo][currPiece][currTo];
          }
       }
 
       // Combine scores for pruning decision
-      int combined_history = history_score;
+      int combined_history = historyScore;
       if (lastMove != NO_MOVE)
       {
          // Weight the scores (can be adjusted based on testing)
-         combined_history = (history_score * 2 + continuation_score) / 3;
+         combined_history = (historyScore * 2 + continuationScore) / 3;
       }
 
       // Apply pruning with timing
@@ -766,7 +766,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
             }
 
             // Continuation-history based pruning (more aggressive)
-            else if (lastMove != NO_MOVE && i > 2 && continuation_score <= ContinuationPruningThreshold[depth])
+            else if (lastMove != NO_MOVE && i > 2 && continuationScore <= ContinuationPruningThreshold[depth])
             {
                skipMove = true;
                profiler.pruningSuccesses++;
@@ -796,12 +796,12 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       }
       // LMR for quiet moves after first few moves
-      else if (!isRoot && depth >= 5 && !inCheck && !isCapture && !isPromotion)
+      else if (!isRoot && depth >= 3 && !inCheck && !isCapture && !isPromotion)
       {
          // More aggressive reduction formula - vary based on depth and move index
          int R = int(0.5 + log(depth) * log(i) / 2.0);
 
-         if (i > 4) // More reduction for later moves
+         if (i > 7) // More reduction for later moves
             R++;
 
          if (depth > 5) // More reduction for deeper searches
@@ -809,15 +809,15 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
          // History-based LMR adjustments
          // Reduce less for moves with good history
-         if (history_score > 5600)
+         if (historyScore > 5600)
             R = std::max(0, R - 1); // Good history, reduce less
-         else if (history_score < -4000)
+         else if (historyScore < -4000)
             R++; // Bad history, reduce more
 
          // Continuation-history based LMR adjustments
-         if (continuation_score > 6000)
+         if (continuationScore > 6000)
             R = std::max(0, R - 1); // Good continuation history, reduce less
-         else if (continuation_score < -4000)
+         else if (continuationScore < -4000)
             R++; // Bad continuation history, reduce more
 
          // Don't reduce too much for killer moves (likely good tactical moves)
