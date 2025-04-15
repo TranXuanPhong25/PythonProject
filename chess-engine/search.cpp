@@ -1010,6 +1010,7 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    *score = bestScore;
    return bestMove;
 }
+
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool printInfo)
 {
    searchStats.clear();
@@ -1020,9 +1021,8 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
    auto startTime = std::chrono::high_resolution_clock::now();
 
    Move bestMove = NO_MOVE;
-   int bestScore = -INF_BOUND; // Initialize to worst possible score
    int prevScore = 0; // Previous iteration score
-   
+   int bestScore = -INF_BOUND; // Best score found so far
    // Use full-width window for first three depths
    for (int depth = 1; depth <= maxDepth; depth++)
    {
@@ -1033,15 +1033,15 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
       if (depth <= 3)
       {
          currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
-         if (currentBestMove != NO_MOVE && score > bestScore)
+         if (currentBestMove != NO_MOVE)
          {
             bestMove = currentBestMove;
-            bestScore = score;
          }
+         bestScore = std::max(bestScore, score);
          prevScore = score;
          if (printInfo)
          {
-            std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << score
+            std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
                       << ", Nodes: " << searchStats.totalNodes()
                       << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
          }
@@ -1064,11 +1064,10 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
 
          currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
 
-         // Store move if it has a better score
-         if (currentBestMove != NO_MOVE && score > bestScore)
+         // Store any valid move we find
+         if (currentBestMove != NO_MOVE)
          {
             bestMove = currentBestMove;
-            bestScore = score;
          }
 
          // Search successful - move to next depth
@@ -1083,10 +1082,9 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
          if (failCount >= 2)
          {
             currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
-            if (currentBestMove != NO_MOVE && score > bestScore)
+            if (currentBestMove != NO_MOVE)
             {
                bestMove = currentBestMove;
-               bestScore = score;
             }
             break;
          }
@@ -1096,20 +1094,22 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
             // Failed low - điều chỉnh dựa trên mức độ thất bại
             int delta = alpha - score;
             alpha = std::max(-INF_BOUND, alpha - std::max(windowSize, delta + 20));
-         } else { // score >= beta
+          } else { // score >= beta
             // Failed high - điều chỉnh dựa trên mức độ thất bại
             int delta = score - beta;
             beta = std::min(static_cast<int>(INF_BOUND), beta + std::max(windowSize, delta + 20));
-         }
+          }
           
-         // Increase window size for next attempt
-         windowSize += 25; // Linear growth to prevent exponential growth
+
+         // Triple window size for next attempt - THIS IS THE PROBLEM
+         windowSize += windowSize/2; // Linear growth to prevent exponential growth
       }
-      
+      bestScore = std::max(bestScore, score);
+      // Save this depth's score for next iteration
       prevScore = score;
       if (printInfo)
       {
-         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(currentBestMove) << ", Score: " << score
+         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
                    << ", Nodes: " << searchStats.totalNodes()
                    << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
       }
