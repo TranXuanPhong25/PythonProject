@@ -204,11 +204,7 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             score = historyTable[side][from(move)][to(move)];
         }
 
-        // Temporarily update mobility for this move
-        updateMobility(board, move, mobilityScore, board.sideToMove);
  
-        // Add mobility score to the move's score
-        score += mobilityScore;
         
         // Check if this move delivers checkmate
         // Only do this check for potentially good moves to save time
