@@ -465,7 +465,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       }
    }
 
-   // Pruning section with timing
+   // Pruning section with timing depth 12: 8s->9s
    {
       PROFILE_SCOPE(pruning);
 
