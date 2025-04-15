@@ -130,6 +130,7 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
         counterMove = counterMoveTable[lastMovePiece][lastMoveToSq];
     }
     
+    // Single pass: score all moves and check for checkmates
     for (int i = 0; i < moves.size; ++i)
     {
         Move move = moves[i].move;
@@ -204,28 +205,36 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             score = historyTable[side][from(move)][to(move)];
         }
 
-        // Check for moves that deliver checkmate
-        board.makeMove(move);
-        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(~board.sideToMove))) {
-            Movelist legalMoves;
-            if (board.sideToMove == White) {
-                Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
-            } else {
-                Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
-            }
-            if (legalMoves.size == 0) {
-                score = ISMATE - ply; // High score for delivering checkmate
-            }
-        }
-        board.unmakeMove(move);
-
         // Temporarily update mobility for this move
         updateMobility(board, move, mobilityScore, board.sideToMove);
  
         // Add mobility score to the move's score
         score += mobilityScore;
-
-        // Restore the board state (handled by updateMobility)
+        
+        // Check if this move delivers checkmate
+        // Only do this check for potentially good moves to save time
+        if (move == ttMove || victim != None || score >= 8800 || 
+            board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove))) {
+            
+            board.makeMove(move);
+            
+            // Check if opponent is in check and has no legal moves
+            Square enemyKingSq = board.KingSQ(board.sideToMove);
+            if (board.isSquareAttacked(~board.sideToMove, enemyKingSq)) {
+                Movelist legalMoves;
+                if (board.sideToMove == White) {
+                    Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
+                } else {
+                    Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+                }
+                if (legalMoves.size == 0) {
+                    // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
+                    // Adding to PvMoveScore ensures it's always prioritized over TT moves
+                    score = PvMoveScore + (ISMATE - ply);
+                }
+            }
+            board.unmakeMove(move);
+        }
 
         moves[i].value = score;
     }
@@ -233,21 +242,46 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
 
 void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
 {
-    // Loop through moves in movelist.
+    // Single pass: score all moves including checkmate detection
     for (int i = 0; i < list.size; i++)
     {
-        Piece victim = board.pieceAtB(to(list[i].move));
-        Piece attacker = board.pieceAtB(from(list[i].move));
-        if (list[i].move == tt_move)
+        Move move = list[i].move;
+        Piece victim = board.pieceAtB(to(move));
+        Piece attacker = board.pieceAtB(from(move));
+        
+        // First check if it's a TT move
+        if (move == tt_move)
         {
-            list[i].value = 20000000;
+            list[i].value = PvMoveScore;
         }
+        // Then score based on MVV-LVA for captures
         else if (victim != None)
         {
-            // If it's a capture move, we score using MVVLVA (Most valuable
-            // victim, Least Valuable Attacker)
+            // move is list[i].move
             list[i].value = mvv_lva[attacker][victim] +
-                            (GoodCaptureScore * see(board, list[i].move, -107));
+                           (GoodCaptureScore * see(board, move, -107));
+        }
+        
+        // For promising moves, check if they deliver checkmate
+        if (victim != None || move == tt_move) {
+            board.makeMove(move);
+            
+            // Check if opponent is in check and has no legal moves
+            Square enemyKingSq = board.KingSQ(board.sideToMove);
+            if (board.isSquareAttacked(~board.sideToMove, enemyKingSq)) {
+                Movelist legalMoves;
+                if (board.sideToMove == White) {
+                    Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
+                } else {
+                    Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+                }
+                if (legalMoves.size == 0) {
+                    // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
+                    // The quiescence search is typically called with ply values continuing from the main search
+                    list[i].value = PvMoveScore + (ISMATE - board.halfMoveClock);
+                }
+            }
+            board.unmakeMove(move);
         }
     }
 }
