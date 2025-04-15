@@ -362,7 +362,7 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply)
 {
    searchStats.nodes++; // Count each regular node
-
+   //Step 1: try quiescence search if depth <= 0
    if (depth <= 0)
       return quiescence(board, alpha, beta, table, ply);
 
@@ -376,7 +376,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
       profiler.evaluations++;
       return evaluate(board);
    }
-
+   //Step 2: Transposition table lookup
    // TT lookup with timing
    U64 posKey = board.hashKey;
    bool ttHit;
@@ -841,7 +841,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          score = -negamax(board, depth - 1, -alpha - 1, -alpha, table, ply + 1);
 
          // Only search with full window if it might improve alpha
-         if (score > alpha && score < beta)
+         if (score > alpha && score < beta && isPvNode)
             score = -negamax(board, depth - 1, -beta, -alpha, table, ply + 1);
       }
       else
@@ -1010,7 +1010,6 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    *score = bestScore;
    return bestMove;
 }
-
 Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool printInfo)
 {
    searchStats.clear();
@@ -1021,8 +1020,9 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
    auto startTime = std::chrono::high_resolution_clock::now();
 
    Move bestMove = NO_MOVE;
+   int bestScore = -INF_BOUND; // Initialize to worst possible score
    int prevScore = 0; // Previous iteration score
-   int bestScore = 0; // Best score found so far
+   
    // Use full-width window for first three depths
    for (int depth = 1; depth <= maxDepth; depth++)
    {
@@ -1033,15 +1033,15 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
       if (depth <= 3)
       {
          currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
-         if (currentBestMove != NO_MOVE)
+         if (currentBestMove != NO_MOVE && score > bestScore)
          {
             bestMove = currentBestMove;
+            bestScore = score;
          }
-         bestScore = std::max(bestScore, score);
          prevScore = score;
          if (printInfo)
          {
-            std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
+            std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << score
                       << ", Nodes: " << searchStats.totalNodes()
                       << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
          }
@@ -1064,10 +1064,11 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
 
          currentBestMove = getBestMoveIterativeWithScore(board, depth, table, alpha, beta, &score);
 
-         // Store any valid move we find
-         if (currentBestMove != NO_MOVE)
+         // Store move if it has a better score
+         if (currentBestMove != NO_MOVE && score > bestScore)
          {
             bestMove = currentBestMove;
+            bestScore = score;
          }
 
          // Search successful - move to next depth
@@ -1082,9 +1083,10 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
          if (failCount >= 2)
          {
             currentBestMove = getBestMoveIterativeWithScore(board, depth, table, -INF_BOUND, INF_BOUND, &score);
-            if (currentBestMove != NO_MOVE)
+            if (currentBestMove != NO_MOVE && score > bestScore)
             {
                bestMove = currentBestMove;
+               bestScore = score;
             }
             break;
          }
@@ -1094,22 +1096,20 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool pri
             // Failed low - điều chỉnh dựa trên mức độ thất bại
             int delta = alpha - score;
             alpha = std::max(-INF_BOUND, alpha - std::max(windowSize, delta + 20));
-          } else { // score >= beta
+         } else { // score >= beta
             // Failed high - điều chỉnh dựa trên mức độ thất bại
             int delta = score - beta;
             beta = std::min(static_cast<int>(INF_BOUND), beta + std::max(windowSize, delta + 20));
-          }
+         }
           
-
-         // Triple window size for next attempt - THIS IS THE PROBLEM
+         // Increase window size for next attempt
          windowSize += 25; // Linear growth to prevent exponential growth
       }
-      bestScore = std::max(bestScore, score);
-      // Save this depth's score for next iteration
+      
       prevScore = score;
       if (printInfo)
       {
-         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
+         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(currentBestMove) << ", Score: " << score
                    << ", Nodes: " << searchStats.totalNodes()
                    << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
       }
