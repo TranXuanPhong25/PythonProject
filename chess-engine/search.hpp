@@ -10,6 +10,7 @@
 #include <cmath>
 #include "zugzwang.hpp"
 #include <math.h>
+#include "profiler.hpp"
 using namespace Chess;
 
 // Maximum size for move history stack
