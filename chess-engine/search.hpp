@@ -120,7 +120,7 @@ extern SearchStats searchStats;
 
 int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply = 0);
 
-Move getBestMove(Board &board, int maxDepth, TranspositionTable *table);
+Move getBestMove(Board &board, int maxDepth, TranspositionTable *table,bool printInfo=true);
 
 Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *table,
                                    int alpha, int beta, int *score);

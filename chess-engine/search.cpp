@@ -488,6 +488,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
          {
             board.makeNullMove();
             int nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, table, ply + 1);
+
             board.unmakeNullMove();
 
             if (nullScore >= beta)
@@ -495,7 +496,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
                // Verification search with adaptive strategy
                searchStats.nullCutoffs++;
                profiler.pruningSuccesses++;
-
                // 1. Skip verification for very deep positions with high margins
                if (depth >= 12 && nullScore >= beta + 170)
                   return beta;
@@ -911,13 +911,21 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    {
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
-
+   
    if (moves.size == 0)
    {
-      *score = 0; // Stalemate score
+      // Check for checkmate or stalemate
+      if(board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+      {
+         *score= board.sideToMove == White ? mated_in(depth) : mate_in(-depth);
+      }
+      else
+      {
+         *score= -depth;
+      }
       return NO_MOVE;
    }
-
+   
    // Check if we have a TT move for this position
    bool ttHit;
    TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
@@ -992,7 +1000,7 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    return bestMove;
 }
 
-Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
+Move getBestMove(Board &board, int maxDepth, TranspositionTable *table, bool printInfo)
 {
    searchStats.clear();
    profiler.reset();        // Reset profiling data
@@ -1020,9 +1028,12 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
          }
          bestScore = std::max(bestScore, score);
          prevScore = score;
-         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
-                   << ", Nodes: " << searchStats.totalNodes()
-                   << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
+         if (printInfo)
+         {
+            std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
+                      << ", Nodes: " << searchStats.totalNodes()
+                      << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
+         }
          continue;
       }
 
@@ -1085,20 +1096,26 @@ Move getBestMove(Board &board, int maxDepth, TranspositionTable *table)
       bestScore = std::max(bestScore, score);
       // Save this depth's score for next iteration
       prevScore = score;
-      std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
-                << ", Nodes: " << searchStats.totalNodes()
-                << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
+      if (printInfo)
+      {
+         std::cout << "Depth " << depth << ", Move: " << convertMoveToUci(bestMove) << ", Score: " << prevScore
+                   << ", Nodes: " << searchStats.totalNodes()
+                   << ", NPS: " << searchStats.nodesPerSecond() << std::endl;
+      }
    }
 
    auto endTime = std::chrono::high_resolution_clock::now();
    auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
-   std::cout << "\nBest move: " << convertMoveToUci(bestMove) << " with score: " << bestScore << std::endl;
-   std::cout << "Total search time: " << totalTime.count() << " ms" << std::endl;
-   searchStats.printStats();
+   if (printInfo)
+   {
+      std::cout << "\nBest move: " << convertMoveToUci(bestMove) << " with score: " << bestScore << std::endl;
+      std::cout << "Total search time: " << totalTime.count() << " ms" << std::endl;
+      searchStats.printStats();
 
-   // Print profiling report
-   profiler.printProfileReport();
+      // Print profiling report
+      profiler.printProfileReport();
+   }
 
    return bestMove;
 }
