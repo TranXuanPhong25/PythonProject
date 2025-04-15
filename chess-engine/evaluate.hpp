@@ -106,4 +106,4 @@ inline float getGamePhase(const Board &board)
 }
 
 // Evaluate function with piece-square tables
-int evaluate(const Board &board);
+int evaluate(Board &board);

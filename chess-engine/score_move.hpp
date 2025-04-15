@@ -7,11 +7,6 @@
 
 // Move scoring categories - higher values = higher priority
 
-constexpr int CounterMoveScore = 8800000;     // Counter move
-constexpr int PromotionScore = 8700000;       // Promotion moves
-constexpr int EqualCaptureScore = 8500000;    // Equal captures
-constexpr int BadCaptureScore = 8000000;      // Bad captures (negative SEE)
-
 // Capture scoring array - victim piece type (columns) vs attacker piece type (rows)
 constexpr int mvv_lva[12][12] = {
    105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605, 104, 204, 304,

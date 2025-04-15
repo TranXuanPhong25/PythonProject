@@ -14,9 +14,22 @@ inline int getFlippedSquare(Square sq)
     return squareToIndex(sq) ^ 56; // Flips vertically
 }
 
-int evaluate(const Board &board)
+int evaluate(Board &board)
 {
     int score = 0;
+    // Early exit for checkmate or stalemate
+    // if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+    // {
+    //     Movelist legalMoves;
+    //     if (board.sideToMove == White)
+    //         Movegen::legalmoves<White, ALL>(board, legalMoves);
+    //     else
+    //         Movegen::legalmoves<Black, ALL>(board, legalMoves);
+
+    //     // If no legal moves and in check, it's checkmate
+    //     if (legalMoves.size == 0)
+    //         return board.sideToMove == White ? ISMATED : ISMATE;
+    // }
     float endgameWeight = getGamePhase(board);
 
     // Material counting using bitboards for efficiency
