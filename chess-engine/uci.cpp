@@ -10,7 +10,7 @@ static void uci_send_id()
 }
 
 
-int DefaultHashSize = 258;
+int DefaultHashSize = 1024;
 int CurrentHashSize = DefaultHashSize;
 int LastHashSize = CurrentHashSize;
 
