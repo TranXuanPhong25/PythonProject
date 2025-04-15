@@ -129,10 +129,7 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
         counterMove = counterMoveTable[lastMovePiece][lastMoveToSq];
     }
     
-    // Pre-calculate mobility score once
-    int mobilityScore = evaluateMobility(board, board.sideToMove);
-    
-    // Score each move
+    // Single pass: score all moves and check for checkmates
     for (int i = 0; i < moves.size; ++i)
     {
         Move move = moves[i].move;
@@ -207,29 +204,37 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             score = historyTable[side][from(move)][to(move)];
         }
 
-        // Check for moves that deliver checkmate
-        board.makeMove(move);
-        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(~board.sideToMove))) {
-            Movelist legalMoves;
-            if (board.sideToMove == White) {
-                Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
-            } else {
-                Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
-            }
-            if (legalMoves.size == 0) {
-                score = ISMATE - ply; // High score for delivering checkmate
-            }
-        }
-        board.unmakeMove(move);
-
         // Temporarily update mobility for this move
         updateMobility(board, move, mobilityScore, board.sideToMove);
  
         // Add mobility score to the move's score
         score += mobilityScore;
+        
+        // Check if this move delivers checkmate
+        // Only do this check for potentially good moves to save time
+        if (move == ttMove || victim != None || score >= 8800 || 
+            board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove))) {
+            
+            board.makeMove(move);
+            
+            // Check if opponent is in check and has no legal moves
+            Square enemyKingSq = board.KingSQ(board.sideToMove);
+            if (board.isSquareAttacked(~board.sideToMove, enemyKingSq)) {
+                Movelist legalMoves;
+                if (board.sideToMove == White) {
+                    Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
+                } else {
+                    Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+                }
+                if (legalMoves.size == 0) {
+                    // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
+                    // Adding to PvMoveScore ensures it's always prioritized over TT moves
+                    score = PvMoveScore + (ISMATE - ply);
+                }
+            }
+            board.unmakeMove(move);
+        }
 
-        // Restore the board state (handled by updateMobility
-        // Assign final score to the move
         moves[i].value = score;
     }
 }
@@ -237,59 +242,50 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
 // Enhanced move ordering for quiescence search
 void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
 {
-    // Score each move in the quiescence search list
+    // Single pass: score all moves including checkmate detection
     for (int i = 0; i < list.size; i++)
     {
         Move move = list[i].move;
         Piece victim = board.pieceAtB(to(move));
         Piece attacker = board.pieceAtB(from(move));
-        bool isPromotion = promoted(move);
         
-        // Base score
-        int score = 0;
-        
-        // 1. PV move from transposition table
+        // First check if it's a TT move
         if (move == tt_move)
         {
-            score = PvMoveScore;
+            list[i].value = PvMoveScore;
         }
-        // 2. Captures and promotions
-        else if (victim != None || isPromotion)
+        // Then score based on MVV-LVA for captures
+        else if (victim != None)
         {
-            // For captures, use MVV-LVA and SEE
-            if (victim != None)
-            {
-                // MVV-LVA base scoring
-                score += mvv_lva[attacker][victim];
-                
-                // Add SEE score for better ordering
-                bool isGoodCapture = see(board, move, -65);
-                if (isGoodCapture)
-                {
-                    // Good capture
-                    score += GoodCaptureScore;
-                }
-                else
-                {
-                    // Bad capture, but sometimes necessary in QS
-                    score += BadCaptureScore;
-                }
-            }
-            
-            // For promotions, prioritize queen promotions
-            if (isPromotion)
-            {
-                score += PromotionScore;
-                score += 200; 
-            }
+            // move is list[i].move
+            list[i].value = mvv_lva[attacker][victim] +
+                           (GoodCaptureScore * see(board, move, -107));
         }
         
-        // Set the final score
-        list[i].value = score;
+        // For promising moves, check if they deliver checkmate
+        if (victim != None || move == tt_move) {
+            board.makeMove(move);
+            
+            // Check if opponent is in check and has no legal moves
+            Square enemyKingSq = board.KingSQ(board.sideToMove);
+            if (board.isSquareAttacked(~board.sideToMove, enemyKingSq)) {
+                Movelist legalMoves;
+                if (board.sideToMove == White) {
+                    Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
+                } else {
+                    Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+                }
+                if (legalMoves.size == 0) {
+                    // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
+                    // The quiescence search is typically called with ply values continuing from the main search
+                    list[i].value = PvMoveScore + (ISMATE - board.halfMoveClock);
+                }
+            }
+            board.unmakeMove(move);
+        }
     }
 }
 
-// Find the best move from the list at the given position
 void pickNextMove(const int &moveNum, Movelist &list)
 {
     ExtMove temp;
