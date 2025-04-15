@@ -26,18 +26,18 @@ void updateHistory(Board &board, Move move, int depth, bool isCutoff)
     int side = board.sideToMove == White ? 0 : 1;
     int from_sq = from(move);
     int to_sq = to(move);
-    
+
     // Stockfish-style history update with depth scaling
     int bonus = std::min(32 * depth * depth, 1024);
-    
+
     // Reduce bonus if not a cutoff move
     if (!isCutoff)
         bonus = -bonus;
-    
-    // Decay existing history and add new bonus 
-    historyTable[side][from_sq][to_sq] = 
+
+    // Decay existing history and add new bonus
+    historyTable[side][from_sq][to_sq] =
         historyTable[side][from_sq][to_sq] * 32 / 33 + bonus;
-    
+
     // Clamp to prevent overflow
     if (historyTable[side][from_sq][to_sq] > 20000)
         historyTable[side][from_sq][to_sq] = 20000;
@@ -50,11 +50,11 @@ void updateCounterMove(Board &board, Move lastMove, Move counterMove)
 {
     if (lastMove == NO_MOVE || counterMove == NO_MOVE)
         return;
-    
+
     // Get the piece and square info from the last move
     int lastPiece = board.pieceAtB(to(lastMove)); // The piece at the destination square
-    int lastToSquare = to(lastMove); // Where the opponent's piece landed
-    
+    int lastToSquare = to(lastMove);              // Where the opponent's piece landed
+
     // Store this counter move
     counterMoveTable[lastPiece][lastToSquare] = counterMove;
 }
@@ -72,14 +72,14 @@ void clearHistory()
             }
         }
     }
-    
+
     // Also clear killer moves
     for (int i = 0; i < MAX_PLY; i++)
     {
         killerMoves[i][0] = NO_MOVE;
         killerMoves[i][1] = NO_MOVE;
     }
-    
+
     // Clear countermove table
     for (int i = 0; i < 12; i++)
     {
@@ -88,15 +88,19 @@ void clearHistory()
             counterMoveTable[i][j] = NO_MOVE;
         }
     }
-    
+
     // Clear our move history
     clearMoveHistory();
-    
+
     // Clear continuation history
-    for (int p1 = 0; p1 < 12; p1++) {
-        for (int sq1 = 0; sq1 < 64; sq1++) {
-            for (int p2 = 0; p2 < 12; p2++) {
-                for (int sq2 = 0; sq2 < 64; sq2++) {
+    for (int p1 = 0; p1 < 12; p1++)
+    {
+        for (int sq1 = 0; sq1 < 64; sq1++)
+        {
+            for (int p2 = 0; p2 < 12; p2++)
+            {
+                for (int sq2 = 0; sq2 < 64; sq2++)
+                {
                     continuationHistory[p1][sq1][p2][sq2] = 0;
                 }
             }
@@ -118,17 +122,17 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
     // Get the current position's last move for countermove lookup
     Move lastMove = getLastMove();
     Move counterMove = NO_MOVE;
-    
+
     // If there was a last move, check if we have a countermove for it
     if (lastMove != NO_MOVE)
     {
         Piece lastMovePiece = board.pieceAtB(to(lastMove));
         int lastMoveToSq = to(lastMove);
-        
+
         // Get the countermove for this piece/square combination
         counterMove = counterMoveTable[lastMovePiece][lastMoveToSq];
     }
-    
+
     // Single pass: score all moves and check for checkmates
     for (int i = 0; i < moves.size; ++i)
     {
@@ -138,12 +142,14 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
         Piece victim = board.pieceAtB(to(move));
 
         // Prioritize moves that resolve checks
-        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove))) {
-            if (moveResolvesCheck(board, move)) {
+        if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+        {
+            if (moveResolvesCheck(board, move))
+            {
                 score = 10000; // High priority for check-evasion moves
             }
         }
-        
+
         // Prioritize TT move
         if (move == ttMove)
         {
@@ -176,23 +182,28 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             {
                 int side = board.sideToMove == White ? 0 : 1;
                 int history_score = historyTable[side][from(move)][to(move)];
-                
+
                 // Add continuation history score if we have a previous move
                 int continuation_score = 0;
-                if (lastMove != NO_MOVE) {
+                if (lastMove != NO_MOVE)
+                {
                     Piece lastPiece = board.pieceAtB(to(lastMove));
                     int lastTo = to(lastMove);
-                    
-                    if (lastPiece != None && attacker != None) {
+
+                    if (lastPiece != None && attacker != None)
+                    {
                         continuation_score = continuationHistory[lastPiece][lastTo][attacker][to(move)];
                     }
                 }
-                
+
                 // Combine history and continuation history scores
-                if (lastMove != NO_MOVE) {
+                if (lastMove != NO_MOVE)
+                {
                     // Weight more on regular history as it's more reliable
                     score = (history_score * 2 + continuation_score) / 3;
-                } else {
+                }
+                else
+                {
                     score = history_score;
                 }
             }
@@ -204,32 +215,27 @@ void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
             score = historyTable[side][from(move)][to(move)];
         }
 
- 
-        
-        // Check if this move delivers checkmate
-        // Only do this check for potentially good moves to save time
-        if (move == ttMove || victim != None || score >= 8800 || 
-            board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove))) {
-            
-            board.makeMove(move);
-            
-            // Check if opponent is in check and has no legal moves
-            Square enemyKingSq = board.KingSQ(board.sideToMove);
-            if (board.isSquareAttacked(~board.sideToMove, enemyKingSq)) {
-                Movelist legalMoves;
-                if (board.sideToMove == White) {
-                    Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
-                } else {
-                    Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
-                }
-                if (legalMoves.size == 0) {
-                    // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
-                    // Adding to PvMoveScore ensures it's always prioritized over TT moves
-                    score = PvMoveScore + (ISMATE - ply);
-                }
+        board.makeMove(move);
+
+        // Check if opponent is in check and has no legal moves
+        Square enemyKingSq = board.KingSQ(board.sideToMove);
+        if (board.isSquareAttacked(~board.sideToMove, enemyKingSq))
+        {
+            Movelist legalMoves;
+            if (board.sideToMove == White)
+            {
+                Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
             }
-            board.unmakeMove(move);
+            else
+            {
+                Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+            }
+            if (legalMoves.size == 0)
+            {
+                score = PvMoveScore + (ISMATE - ply);
+            }
         }
+        board.unmakeMove(move);
 
         moves[i].value = score;
     }
@@ -244,7 +250,7 @@ void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
         Move move = list[i].move;
         Piece victim = board.pieceAtB(to(move));
         Piece attacker = board.pieceAtB(from(move));
-        
+
         // First check if it's a TT move
         if (move == tt_move)
         {
@@ -255,30 +261,32 @@ void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
         {
             // move is list[i].move
             list[i].value = mvv_lva[attacker][victim] +
-                           (GoodCaptureScore * see(board, move, -107));
+                            (GoodCaptureScore * see(board, move, -107));
         }
-        
-        // For promising moves, check if they deliver checkmate
-        if (victim != None || move == tt_move) {
-            board.makeMove(move);
-            
-            // Check if opponent is in check and has no legal moves
-            Square enemyKingSq = board.KingSQ(board.sideToMove);
-            if (board.isSquareAttacked(~board.sideToMove, enemyKingSq)) {
-                Movelist legalMoves;
-                if (board.sideToMove == White) {
-                    Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
-                } else {
-                    Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
-                }
-                if (legalMoves.size == 0) {
-                    // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
-                    // The quiescence search is typically called with ply values continuing from the main search
-                    list[i].value = PvMoveScore + (ISMATE - board.halfMoveClock);
-                }
+
+        board.makeMove(move);
+
+        // Check if opponent is in check and has no legal moves
+        Square enemyKingSq = board.KingSQ(board.sideToMove);
+        if (board.isSquareAttacked(~board.sideToMove, enemyKingSq))
+        {
+            Movelist legalMoves;
+            if (board.sideToMove == White)
+            {
+                Movegen::legalmoves<White, Movetype::ALL>(board, legalMoves);
             }
-            board.unmakeMove(move);
+            else
+            {
+                Movegen::legalmoves<Black, Movetype::ALL>(board, legalMoves);
+            }
+            if (legalMoves.size == 0)
+            {
+                // This move delivers checkmate, use ISMATE - ply for proper mate distance scoring
+                // The quiescence search is typically called with ply values continuing from the main search
+                list[i].value = PvMoveScore + (ISMATE - board.halfMoveClock);
+            }
         }
+        board.unmakeMove(move);
     }
 }
 
@@ -288,7 +296,7 @@ void pickNextMove(const int &moveNum, Movelist &list)
     int index = 0;
     int bestscore = -INF_BOUND;
     int bestnum = moveNum;
-    
+
     // Find the highest scoring move
     for (index = moveNum; index < list.size; ++index)
     {
@@ -298,7 +306,7 @@ void pickNextMove(const int &moveNum, Movelist &list)
             bestnum = index;
         }
     }
-    
+
     // Swap the highest scoring move to the current position
     temp = list[moveNum];
     list[moveNum] = list[bestnum];
@@ -317,13 +325,13 @@ Move StagedMoveGenerator::nextMove()
 {
     if (!hasNext())
         return NO_MOVE;
-    
+
     // TT move stage
     if (currentStage == TT_MOVE)
     {
         currentStage = GOOD_CAPTURES;
         currentMoveIndex = 0;
-        
+
         // If we have a TT move, return it first
         if (ttMove != NO_MOVE && !ttMoveSearched)
         {
@@ -340,32 +348,32 @@ Move StagedMoveGenerator::nextMove()
         // No TT move or not found, skip to next stage
         ttMoveSearched = true;
     }
-    
+
     // Good captures stage
     if (currentStage == GOOD_CAPTURES)
     {
         while (currentMoveIndex < moves.size)
         {
             Move move = moves[currentMoveIndex++].move;
-            
+
             // Skip the TT move as it's already been returned
             if (move == ttMove)
                 continue;
-            
+
             Piece victim = board.pieceAtB(to(move));
-            
+
             // Process captures with positive SEE
             if (victim != None && see(board, move, -100))
             {
                 return move;
             }
         }
-        
+
         // Move to killer moves stage
         currentStage = KILLER_MOVES;
         currentMoveIndex = 0;
     }
-    
+
     // Killer moves stage
     if (currentStage == KILLER_MOVES)
     {
@@ -373,53 +381,53 @@ Move StagedMoveGenerator::nextMove()
         while (currentMoveIndex < 2)
         {
             Move killerMove = killerMoves[ply][currentMoveIndex++];
-            
+
             // Skip invalid or already processed moves
             if (killerMove == NO_MOVE || killerMove == ttMove)
                 continue;
-                
+
             // Check if it's a legal move in our list
             for (int i = 0; i < moves.size; i++)
             {
-                if (moves[i].move == killerMove && 
+                if (moves[i].move == killerMove &&
                     board.pieceAtB(to(killerMove)) == None) // Make sure it's not a capture
                 {
                     return killerMove;
                 }
             }
         }
-        
+
         // Move to counter moves stage
         currentStage = COUNTER_MOVES;
         currentMoveIndex = 0;
     }
-    
+
     // Counter moves stage
     if (currentStage == COUNTER_MOVES)
     {
         // Get the last move from history
         Move lastMove = getLastMove();
-        
+
         if (lastMove != NO_MOVE)
         {
             // Get the counter move for this position
             Piece lastPiece = board.pieceAtB(to(lastMove));
             int lastToSq = to(lastMove);
-            
+
             if (lastPiece != None)
             {
                 Move counterMove = counterMoveTable[lastPiece][lastToSq];
-                
+
                 // Skip if already processed
-                if (counterMove != NO_MOVE && 
-                    counterMove != ttMove && 
-                    counterMove != killerMoves[ply][0] && 
+                if (counterMove != NO_MOVE &&
+                    counterMove != ttMove &&
+                    counterMove != killerMoves[ply][0] &&
                     counterMove != killerMoves[ply][1])
                 {
                     // Check if it's a legal move in our list
                     for (int i = 0; i < moves.size; i++)
                     {
-                        if (moves[i].move == counterMove && 
+                        if (moves[i].move == counterMove &&
                             board.pieceAtB(to(counterMove)) == None) // Make sure it's not a capture
                         {
                             currentStage = QUIET_MOVES;
@@ -430,86 +438,86 @@ Move StagedMoveGenerator::nextMove()
                 }
             }
         }
-        
+
         // No counter move or not found, move to quiet moves stage
         currentStage = QUIET_MOVES;
         currentMoveIndex = 0;
     }
-    
+
     // Quiet moves stage (with good history)
     if (currentStage == QUIET_MOVES)
     {
         while (currentMoveIndex < moves.size)
         {
             Move move = moves[currentMoveIndex++].move;
-            
+
             // Skip moves already processed
-            if (move == ttMove || 
-                move == killerMoves[ply][0] || 
+            if (move == ttMove ||
+                move == killerMoves[ply][0] ||
                 move == killerMoves[ply][1])
                 continue;
-                
+
             // Process only quiet moves with good history
             if (board.pieceAtB(to(move)) == None && !promoted(move))
             {
                 int side = board.sideToMove == White ? 0 : 1;
                 int history = historyTable[side][from(move)][to(move)];
-                
+
                 // Only return moves with decent history scores
                 if (history > -5000)
                     return move;
             }
         }
-        
+
         // Move to bad captures stage
         currentStage = BAD_CAPTURES;
         currentMoveIndex = 0;
     }
-    
+
     // Bad captures stage
     if (currentStage == BAD_CAPTURES)
     {
         while (currentMoveIndex < moves.size)
         {
             Move move = moves[currentMoveIndex++].move;
-            
+
             // Skip moves already processed
             if (move == ttMove)
                 continue;
-                
+
             Piece victim = board.pieceAtB(to(move));
-            
+
             // Process captures with negative SEE
             if (victim != None && !see(board, move, -100))
             {
                 return move;
             }
         }
-        
+
         // Move to remaining moves stage
         currentStage = REMAINING_MOVES;
         currentMoveIndex = 0;
     }
-    
+
     // Remaining moves stage
     if (currentStage == REMAINING_MOVES)
     {
         while (currentMoveIndex < moves.size)
         {
             Move move = moves[currentMoveIndex++].move;
-            
+
             // Skip all moves already processed at earlier stages
-            if (move == ttMove || 
-                move == killerMoves[ply][0] || 
-                move == killerMoves[ply][1] || 
+            if (move == ttMove ||
+                move == killerMoves[ply][0] ||
+                move == killerMoves[ply][1] ||
                 board.pieceAtB(to(move)) != None)
                 continue;
-                
+
             // Return any remaining unprocessed moves
             return move;
         }
     }
-    
+
     // No moves left
     return NO_MOVE;
 }

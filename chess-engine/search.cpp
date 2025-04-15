@@ -179,6 +179,20 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    bool ttHit = false;
    bool isPvNode = (beta - alpha) > 1;
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+   if (inCheck)
+   {
+      Movelist allMoves;
+      if (board.sideToMove == White)
+         Movegen::legalmoves<White, ALL>(board, allMoves);
+      else
+         Movegen::legalmoves<Black, ALL>(board, allMoves);
+
+      // If no legal moves and in check, it's checkmate
+      if (allMoves.size == 0)
+      {
+         return mated_in(ply);
+      }
+   }
    TTEntry &tte = table->probe_entry(board.hashKey, ttHit);
    const int tt_score = ttHit ? score_from_tt(tte.get_score(), ply) : 0;
    {
@@ -219,10 +233,8 @@ int quiescence(Board &board, int alpha, int beta, TranspositionTable *table, int
    // Enhanced move ordering for quiescence search
    {
       PROFILE_SCOPE(moveOrdering);
-      // Stage 1: Score all moves
       ScoreMovesForQS(board, captures, tte.move);
 
-      // Stage 2: Sort all moves at once for better cache efficiency
       std::stable_sort(captures.begin(), captures.end(), std::greater<ExtMove>());
    }
 
@@ -404,7 +416,6 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
 
    // Get the lastMove from our custom move history
    Move lastMove = getLastMove();
-
    // Checkmate detection and pruning logic
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    bool isRoot = (ply == 0);
@@ -911,21 +922,21 @@ Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *
    {
       Movegen::legalmoves<Black, ALL>(board, moves);
    }
-   
+
    if (moves.size == 0)
    {
       // Check for checkmate or stalemate
-      if(board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+      if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
       {
-         *score= board.sideToMove == White ? mated_in(depth) : mate_in(-depth);
+         *score = board.sideToMove == White ? mated_in(depth) : mate_in(-depth);
       }
       else
       {
-         *score= -depth;
+         *score = -depth;
       }
       return NO_MOVE;
    }
-   
+
    // Check if we have a TT move for this position
    bool ttHit;
    TTEntry &entry = table->probe_entry(board.hashKey, ttHit);
