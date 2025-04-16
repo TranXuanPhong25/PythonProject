@@ -13,6 +13,8 @@ pygame.init()
 WIDTH, HEIGHT = 1040, 860  # Increased width to accommodate the sidebar
 BOARD_WIDTH = 840
 SQUARE_SIZE = 100
+# scale down
+
 WHITE = (240, 217, 181)
 BROWN = (181, 136, 99)
 HIGHLIGHT = (186, 202, 68)  # Màu highlight ô được chọn
@@ -26,11 +28,16 @@ AI_TIME_LIMIT = float(os.getenv("AI_TIME_LIMIT", 10))
 ENGINE_PATH = os.getenv("ENGINE_PATH", "chess-engine/bin/uci.exe").split()
 CUSTOM_FEN = os.getenv("CUSTOM_FEN",
                        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")  # Empty string if not set
+SCALE = int(os.getenv("SCALE", 100))  # Scale percentage for the board
 # Add this constant near the top with your other color definitions
 LEGAL_MOVE_INDICATOR = (255, 255, 255, 170)  # Semi-transparent white for move indicators
 UNDO_HIGHLIGHT = (255, 100, 100, 200)  # Red highlight for undo moves
 REDO_HIGHLIGHT = (100, 255, 100, 200)  # Green highlight for redo moves
 
+SQUARE_SIZE = int(SQUARE_SIZE * SCALE/100)
+BOARD_WIDTH = int(BOARD_WIDTH * SCALE/100)
+WIDTH = WIDTH * SCALE/100
+HEIGHT = HEIGHT * SCALE/100
 # Game states
 MODE_SELECTION = -1  # New state for mode selection
 HUMAN_VS_HUMAN = 0
