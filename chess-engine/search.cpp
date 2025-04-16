@@ -465,7 +465,7 @@ int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *ta
    {
       int score = 0;
       if (inCheck)
-         score = board.sideToMove == White ? mated_in(ply) : mate_in(-ply);
+         score =  mated_in(ply);
       else
          score = 0;
       table->store(posKey, HFEXACT, NO_MOVE, depth, score, score);
