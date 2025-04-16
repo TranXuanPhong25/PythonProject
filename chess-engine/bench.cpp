@@ -44,6 +44,7 @@ void benchSearch(int depth, TranspositionTable *table)
        "Q7/8/8/1R6/3R4/4K2P/2k5/8 w - - 0 1", // need to check
        "7k/8/8/8/5q2/8/7r/3K4 b - - 0 1",     // f4d2,
        "8/8/4k3/8/6q1/7r/1K6/8 b - - 0 1",
+       "r2r2k1/pp2bppp/4b3/8/4N3/8/PPP1BPPP/R4RK1 w - - 0 1" //b2b3
       };
 
    std::cout << "\nStarting Search Benchmark..." << std::endl;
