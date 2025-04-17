@@ -23,7 +23,13 @@ void initLateMoveTable()
       lmpTable[1][depth] = 4.0 + 4 * depth * depth / 4.5;
    }
 }
-
+bool gives_check(Board &board, Move move)
+{
+   board.makeMove(move);
+   bool check = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+   board.unmakeMove(move);
+   return check;
+}
 int score_to_tt(int score, int ply)
 {
    if (score >= IS_MATE_IN_MAX_PLY)
@@ -164,6 +170,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
    bool isRoot = (ss->ply == 0);
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
    bool isPVNode = (beta - alpha) > 1;
+
    bool improving = false;
    int eval = 0;
 
@@ -181,7 +188,12 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
       {
          return 0;
       }
-      // TODO: maybe for nonPV
+      //  Mate distance pruning. Even if we mate at the next move our score
+      // would be at best mate_in(ss->ply+1), but if alpha is already bigger because
+      // a shorter mate was found upward in the tree then there is no need to search
+      // because we will never beat the current alpha. Same logic but with reversed
+      // signs applies also in the opposite condition of being mated instead of giving
+      // mate. In this case return a fail-high score.
       alpha = std::max(alpha, mated_in(ss->ply));
       beta = std::min(beta, mate_in(ss->ply + 1));
       if (alpha >= beta)
@@ -278,7 +290,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
       if (depth >= 5 && abs(beta) < ISMATE && (!ttHit || eval >= rbeta || ttEntry.depth < depth - 3))
       {
          Movelist captures;
-         if(board.sideToMove == White)
+         if (board.sideToMove == White)
             Movegen::legalmoves<White, CAPTURE>(board, captures);
          else
             Movegen::legalmoves<Black, CAPTURE>(board, captures);
@@ -325,24 +337,9 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          return quiescence(alpha, beta, st, ss);
       }
    }
-   // Decrase depth if we are in a cut node
+   // Decrease depth if we are in a cut node
    if (cutnode && depth >= 7 && ttEntry.move == NO_MOVE)
       depth--;
-
-   // bool futilityPruning = false;
-   // if (!isPVNode && !inCheck && depth <= 3)
-   // {
-   //    int futilityMargin = 70 * depth;
-   //    futilityPruning = (staticEval + futilityMargin <= alpha);
-   // }
-
-   // // Static Null Move Pruning
-   // if (!isPVNode && !inCheck && depth <= 5)
-   // {
-   //    int margin = depth <= 3 ? 90 * depth : 300 + 50 * (depth - 3);
-   //    if (staticEval - margin >= beta)
-   //       return beta;
-   // }
 
    int bestScore = -INF_BOUND;
    int moveCount = 0;
@@ -374,7 +371,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
       bool isCapture = is_capture(board, move);
       bool isPromotion = promoted(move);
       bool isQuiet = !isCapture && !isPromotion;
-
+      bool givesCheck = gives_check(board, move);
       // It is not necessarily the best move, but good enough to refute opponents previous move
       bool refutationMove = (ss->killers[0] == move || ss->killers[1] == move);
 
@@ -392,14 +389,14 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * We can prune quiet moves that are not captures or promotions
        * LMP + Continuation History pruning + Futility Pruning + SEE pruning
        */
-      if (!isRoot && bestScore > -ISMATE)
+      if (!isRoot && bestScore > -ISMATE && board.nonPawnMat(board.sideToMove))
       {
 
          // Get precalculated lmr depth from lmrTable
          int lmrDepth = lmrTable[std::min(depth, MAXDEPTH)][std::min(moveCount, MAXDEPTH)];
 
          // Pruning for quiets
-         if (isQuiet)
+         if (isQuiet && !givesCheck)
          {
             /* Late Move Pruning/Movecount pruning
              * A further variation of Extended Futility Pruning
@@ -516,7 +513,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * If we are in a PV node, we do a full window search on the first move or might improve alpha.
        * https://www.chessprogramming.org/Principal_Variation_Search
        */
-      if (isPVNode && (moveCount == 1 || (score > alpha && score < beta)))
+      if (isPVNode && (moveCount == 1 || (score > alpha && (isRoot||score < beta))))
       {
          score = -negamax(-beta, -alpha, depth - 1, st, ss + 1, false);
       }
@@ -551,6 +548,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
             // clang-format on
          }
       }
+      
    }
    // Terminal node if no moves exist
    if (moveCount == 0)
@@ -640,7 +638,7 @@ int aspirationWindow(int prevEval, int depth, SearchThread &st, Move &bestmove)
       {
          break;
       }
-      delta += delta / 2;
+      delta += delta / 3;
    }
 
    return score;
