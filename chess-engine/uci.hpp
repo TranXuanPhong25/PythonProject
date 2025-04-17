@@ -7,5 +7,4 @@
 #include <sstream>
 #include <bits/unique_ptr.h>
 #include "search.hpp" 
-
 void uci_loop();

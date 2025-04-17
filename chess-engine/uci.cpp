@@ -19,7 +19,9 @@ bool IsUci = false;
 TranspositionTable *table;
 
 void uci_loop()
-{
+{   
+    SearchThread st;
+    st.board = Board(DEFAULT_POS);
     std::cout << "Chess Engine Copyright (C) 2023" << std::endl;
 
     auto ttable = std::make_unique<TranspositionTable>();
@@ -27,8 +29,7 @@ void uci_loop()
     table->Initialize(DefaultHashSize);
 
     // Create our board instance
-    Board board(DEFAULT_POS);
-    int default_depth = 10; // Default search depth
+    int default_depth = 15; // Default search depth
 
     std::string command;
     std::string token;
@@ -55,7 +56,7 @@ void uci_loop()
         else if (token == "ucinewgame")
         {
             table->Initialize(CurrentHashSize);
-            board = Board(DEFAULT_POS); // Reset the board
+            st.applyFen(DEFAULT_POS);
             continue;
         }
         else if (token == "uci")
@@ -71,7 +72,7 @@ void uci_loop()
             is >> std::skipws >> option;
             if (option == "startpos")
             {
-                board = Board(DEFAULT_POS);
+                st.applyFen(DEFAULT_POS);
             }
             else if (option == "fen")
             {
@@ -104,7 +105,7 @@ void uci_loop()
                 final_fen += option;
 
                 // Apply the FEN
-                board = Board(final_fen);
+                st.applyFen(final_fen);
             }
 
             is >> std::skipws >> option;
@@ -114,10 +115,10 @@ void uci_loop()
 
                 while (is >> moveString)
                 {
-                    Move move = convertUciToMove(board, moveString);
+                    Move move = convertUciToMove(st.board, moveString);
                     if (move != NO_MOVE)
                     {
-                        board.makeMove(move);
+                        st.board.makeMove(move);
                     }
                 }
             }
@@ -165,39 +166,7 @@ void uci_loop()
                 token = "none";
             }
 
-            // Start search for best move
-            auto start_time = std::chrono::high_resolution_clock::now();
-
-            // Perform the search with proper error handling
-            Move bestMove = NO_MOVE;
-            try
-            {
-                bestMove = getBestMove(board, depth, table);
-            }
-            catch (const std::exception &e)
-            {
-                std::cerr << "Error during search: " << e.what() << std::endl;
-                bestMove = NO_MOVE;
-            }
-            catch (...)
-            {
-                std::cerr << "Unknown error during search" << std::endl;
-                bestMove = NO_MOVE;
-            }
-
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-
-            // Output the best move
-            if (bestMove != NO_MOVE)
-            {
-                std::cout << "info depth " << depth << " time " << duration << std::endl;
-                std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
-            }
-            else
-            {
-                std::cout << "bestmove (none)" << std::endl;
-            }
+           iterativeDeepening(st, depth);
         }
         else if (token == "setoption")
         {
@@ -217,16 +186,16 @@ void uci_loop()
         /* Debugging Commands */
         else if (token == "print")
         {
-            std::cout << board << std::endl;
+            std::cout << st.board << std::endl;
             continue;
         }
         else if (token == "eval")
         {
-            std::cout << "Eval: " << evaluate(board) << std::endl;
+            std::cout << "Eval: " << evaluate(st.board) << std::endl;
         }
         else if (token == "side")
         {
-            std::cout << (board.sideToMove == White ? "White" : "Black") << std::endl;
+            std::cout << (st.board.sideToMove == White ? "White" : "Black") << std::endl;
         }
     }
 

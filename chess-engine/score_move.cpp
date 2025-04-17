@@ -1,196 +1,70 @@
 #include "score_move.hpp"
-#include "search.hpp"
 
-Move killerMoves[MAX_PLY][2] = {{NO_MOVE}};
-int historyTable[2][64][64] = {{{0}}};
-Move counterMoveTable[12][64] = {{NO_MOVE}};
-
-// Function to add a new killer move
-void addKillerMove(Move move, int ply)
+static inline int getContinuationHistoryScores(SearchThread &st, SearchStack *ss,
+                                               const Move &move)
 {
-    // Don't add the same killer twice
-    if (move != killerMoves[ply][0])
+
+    int score = 0;
+
+    if ((ss - 1)->move)
     {
-        // Shift existing killer
-        killerMoves[ply][1] = killerMoves[ply][0];
-        // Add new first killer
-        killerMoves[ply][0] = move;
+        score += (*(ss - 1)->continuationHistory)[st.board.pieceAtB(from(move))][to(move)];
     }
-}
 
-// Update history score for a good move
-void updateHistory(Board &board, Move move, int depth, bool isCutoff)
-{
-    int side = board.sideToMove == White ? 0 : 1;
-    int from_sq = from(move);
-    int to_sq = to(move);
-    
-    // Stockfish-style history update with depth scaling
-    int bonus = std::min(32 * depth * depth, 1024);
-    
-    // Reduce bonus if not a cutoff move
-    if (!isCutoff)
-        bonus = -bonus;
-    
-    // Decay existing history and add new bonus 
-    historyTable[side][from_sq][to_sq] = 
-        historyTable[side][from_sq][to_sq] * 32 / 33 + bonus;
-    
-    // Clamp to prevent overflow
-    if (historyTable[side][from_sq][to_sq] > 20000)
-        historyTable[side][from_sq][to_sq] = 20000;
-    if (historyTable[side][from_sq][to_sq] < -20000)
-        historyTable[side][from_sq][to_sq] = -20000;
-}
-
-// Update countermove history - store a move that was good against opponent's last move
-void updateCounterMove(Board &board, Move lastMove, Move counterMove)
-{
-    if (lastMove == NO_MOVE || counterMove == NO_MOVE)
-        return;
-    
-    // Get the piece and square info from the last move
-    int lastPiece = board.pieceAtB(to(lastMove)); // The piece at the destination square
-    int lastToSquare = to(lastMove); // Where the opponent's piece landed
-    
-    // Store this counter move
-    counterMoveTable[lastPiece][lastToSquare] = counterMove;
-}
-
-// Clear history scores between games
-void clearHistory()
-{
-    for (int i = 0; i < 2; i++)
+    if ((ss - 2)->move)
     {
-        for (int j = 0; j < 64; j++)
+        score += (*(ss - 2)->continuationHistory)[st.board.pieceAtB(from(move))][to(move)];
+    }
+
+    return score;
+}
+
+// Move scoring
+void scoreMoves(SearchThread &st, Movelist &list, SearchStack *ss, Move tt_move)
+{
+
+    // Loop through moves in movelist.
+    for (int i = 0; i < list.size; i++)
+    {
+        Piece victim = st.board.pieceAtB(to(list[i].move));
+        Piece attacker = st.board.pieceAtB(from(list[i].move));
+
+        // Score tt move the highest
+        if (list[i].move == tt_move)
         {
-            for (int k = 0; k < 64; k++)
-            {
-                historyTable[i][j][k] = 0;
-            }
+            list[i].value = PvMoveScore;
         }
-    }
-    
-    // Also clear killer moves
-    for (int i = 0; i < MAX_PLY; i++)
-    {
-        killerMoves[i][0] = NO_MOVE;
-        killerMoves[i][1] = NO_MOVE;
-    }
-    
-    // Clear countermove table
-    for (int i = 0; i < 12; i++)
-    {
-        for (int j = 0; j < 64; j++)
-        {
-            counterMoveTable[i][j] = NO_MOVE;
-        }
-    }
-    
-    // Clear our move history
-    clearMoveHistory();
-    
-    // Clear continuation history
-    for (int p1 = 0; p1 < 12; p1++) {
-        for (int sq1 = 0; sq1 < 64; sq1++) {
-            for (int p2 = 0; p2 < 12; p2++) {
-                for (int sq2 = 0; sq2 < 64; sq2++) {
-                    continuationHistory[p1][sq1][p2][sq2] = 0;
-                }
-            }
-        }
-    }
-}
-
-void scoreMoves(Movelist &moves, Board &board, Move ttMove, int ply)
-{
-    // Get the current position's last move for countermove lookup
-    Move lastMove = getLastMove();
-    Move counterMove = NO_MOVE;
-    
-    // If there was a last move, check if we have a countermove for it
-    if (lastMove != NO_MOVE)
-    {
-        Piece lastMovePiece = board.pieceAtB(to(lastMove));
-        int lastMoveToSq = to(lastMove);
-        
-        // Get the countermove for this piece/square combination
-        counterMove = counterMoveTable[lastMovePiece][lastMoveToSq];
-    }
-    
-    for (int i = 0; i < moves.size; ++i)
-    {
-        Move move = moves[i].move;
-        int score = 0;
-        Piece attacker = board.pieceAtB(from(move));
-        Piece victim = board.pieceAtB(to(move));
-        
-        // Prioritize TT move
-        if (move == ttMove)
-        {
-            score = PvMoveScore;
-        }
-        // capture
         else if (victim != None)
         {
-            score += mvv_lva[attacker][victim];
-            score += (GoodCaptureScore * see(board, move, -107));
+            // If it's a capture move, we score using MVVLVA (Most valuable
+            // victim, Least Valuable Attacker) and if see move that doesn't
+            // lose material, we add additional bonus
+
+            list[i].value = mvv_lva[attacker][victim] +
+                            (GoodCaptureScore * see(st.board, list[i].move, -107));
         }
-        // Check for killer moves
-        else if (ply < MAX_PLY)
+        else if (list[i].move == ss->killers[0])
         {
-            if (move == killerMoves[ply][0])
-            {
-                score = 9000;
-            }
-            else if (move == killerMoves[ply][1])
-            {
-                score = 8900;
-            }
-            // Check for countermove (slightly less value than killer moves)
-            else if (move == counterMove)
-            {
-                score = 8800;
-            }
-            // History and continuation history for quiet moves
-            else
-            {
-                int side = board.sideToMove == White ? 0 : 1;
-                int history_score = historyTable[side][from(move)][to(move)];
-                
-                // Add continuation history score if we have a previous move
-                int continuation_score = 0;
-                if (lastMove != NO_MOVE) {
-                    Piece lastPiece = board.pieceAtB(to(lastMove));
-                    int lastTo = to(lastMove);
-                    
-                    if (lastPiece != None && attacker != None) {
-                        continuation_score = continuationHistory[lastPiece][lastTo][attacker][to(move)];
-                    }
-                }
-                
-                // Combine history and continuation history scores
-                if (lastMove != NO_MOVE) {
-                    // Weight more on regular history as it's more reliable
-                    score = (history_score * 2 + continuation_score) / 3;
-                } else {
-                    score = history_score;
-                }
-            }
+            // Score for killer 1
+            list[i].value = Killer1Score;
         }
-        // History heuristic (quiets that have been good in the past)
+        else if (list[i].move == ss->killers[1])
+        {
+            // Score for killer 2
+            list[i].value = Killer2Score;
+        }
         else
         {
-            int side = board.sideToMove == White ? 0 : 1;
-            score = historyTable[side][from(move)][to(move)];
+            // Otherwise, history score.
+            list[i].value = st.searchHistory[attacker][to(list[i].move)] + getContinuationHistoryScores(st, ss, list[i].move);
         }
-        
-        moves[i].value = score;
     }
 }
 
-void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
+// Used for Qsearch move scoring
+void scoreMovesForQS(Board &board, Movelist &list, Move tt_move)
 {
+
     // Loop through moves in movelist.
     for (int i = 0; i < list.size; i++)
     {
@@ -198,7 +72,7 @@ void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
         Piece attacker = board.pieceAtB(from(list[i].move));
         if (list[i].move == tt_move)
         {
-            list[i].value = 20000000;
+            list[i].value = PvMoveScore;
         }
         else if (victim != None)
         {
@@ -210,21 +84,88 @@ void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move)
     }
 }
 
-void pickNextMove(const int &moveNum, Movelist &list)
+void pickNextMove(const int& moveNum, Movelist &list)
 {
+
     ExtMove temp;
     int index = 0;
     int bestscore = -INF_BOUND;
     int bestnum = moveNum;
+
     for (index = moveNum; index < list.size; ++index)
     {
+
         if (list[index].value > bestscore)
         {
             bestscore = list[index].value;
             bestnum = index;
         }
     }
+
     temp = list[moveNum];
     list[moveNum] = list[bestnum]; // Sort the highest score move to highest.
     list[bestnum] = temp;
+}
+
+void updateH(int16_t &historyScore, const int bonus)
+{
+    historyScore += bonus - historyScore * std::abs(bonus) / MAXHISTORY;
+}
+
+void updateCH(int16_t &historyScore, const int bonus)
+{
+
+    historyScore += bonus - historyScore * std::abs(bonus) / MAXCOUNTERHISTORY;
+}
+
+void updateContinuationHistories(SearchStack *ss, Piece piece, Move move, int bonus)
+{
+
+    if ((ss - 1)->move)
+    {
+        updateCH((*(ss - 1)->continuationHistory)[ss->movedPice][to(move)], bonus);
+    }
+
+    if ((ss - 2)->move)
+    {
+        updateCH((*(ss - 2)->continuationHistory)[ss->movedPice][to(move)], bonus);
+    }
+}
+
+void updateHistories(SearchThread &st, SearchStack *ss, Move bestmove, Movelist &quietList, int depth)
+{
+    // Update best move score
+    int bonus = historyBonus(depth);
+
+    if (depth > 2)
+    {
+        updateH(st.searchHistory[st.board.pieceAtB(from(bestmove))][to(bestmove)], bonus);
+        updateContinuationHistories(ss, st.board.pieceAtB(from(bestmove)), bestmove, bonus);
+    }
+
+    for (int i = 0; i < quietList.size; i++)
+    {
+        Move move = quietList[i].move;
+
+        if (move == bestmove)
+            continue; // Don't give penalty to our best move, so skip it.
+
+        // Penalize moves that didn't cause a beta cutoff.
+        updateContinuationHistories(ss, st.board.pieceAtB(from(move)), move, -bonus);
+        updateH(st.searchHistory[st.board.pieceAtB(from(move))][to(move)], -bonus);
+    }
+}
+
+int getHistoryScores(int &his, int &ch, int &fmh, SearchThread &st, SearchStack *ss, const Move move)
+{
+    Move previous_move = (ss - 1)->move;
+    Move previous_previous_move = (ss - 2)->move;
+    Piece moved_piece = st.board.pieceAtB(from(move));
+
+    his = st.searchHistory[st.board.pieceAtB(from(move))][to(move)];
+
+    ch = (ss - 1)->move ? (*(ss - 1)->continuationHistory)[moved_piece][to(move)] : 0;
+    fmh = (ss - 2)->move ? (*(ss - 2)->continuationHistory)[moved_piece][to(move)] : 0;
+
+    return his + ch + fmh;
 }

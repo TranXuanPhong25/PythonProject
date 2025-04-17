@@ -3,6 +3,7 @@
 
 int main()
 {
+   initLateMoveTable();
    uci_loop();
    return 0;
 }
