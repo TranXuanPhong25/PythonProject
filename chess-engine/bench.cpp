@@ -53,9 +53,15 @@ const std::string positions[] = {
     "r2q1rk1/ppp1nppp/3p1n2/3Pp1B1/1b2P1b1/2NB1N2/PPP2PPP/R2Q1RK1 w - - 4 10", // g5f6,
     "r3r3/5pk1/3p3p/3Pp1p1/1Pp1n1q1/2Q1B3/1PB1NK2/3R2R1 w - - 0 41",           // c2e4
     "r3r3/5pk1/3p3p/3Pp1p1/1Pp1q3/2Q1B3/1P2NK2/3R2R1 w - - 0 42",              // e3d2
-    "8/r5k1/3p4/3P2pp/1P3p2/1K6/1P1r4/4RR2 w - - 4 52"                         // e1e6
-
-};
+    "8/r5k1/3p4/3P2pp/1P3p2/1K6/1P1r4/4RR2 w - - 4 52"    ,                     // e1e6
+      "1r1qkb1r/p1pb1ppp/2n2n2/3p4/Q3p3/2P2N2/PP1PPPPP/RNB1KB1R w KQk - 0 8",
+      "2b2b1r/r3kp2/pqB1p2p/1p2P1p1/3pQ1n1/6P1/PP2P2P/RNB2RK1 b - - 6 17",
+      "rnb1kb1r/pppp1ppp/5n2/8/4q3/5N2/PPPPBPPP/RNBQK2R b KQkq - 1 5",
+      "3r4/2R5/1k3pp1/p7/B6p/2b2P1P/5P1B/5K2 b - - 5 57",
+      "r3r1k1/1p1bn1pp/4p3/pPPp1p2/P2P1q2/3B1N2/2Q2RPP/4R1K1 b - - 1 22",
+      "r3b1k1/1p4p1/7p/pPP1Q3/P2P4/1q6/2B2RPP/6K1 b - - 6 35",
+      "r5k1/1p3bp1/7p/pPP5/P2PQ3/8/2B3PP/6K1 b - - 1 37"
+   };
 const std::string targetMoves[] = {
     "b2b3",
     "a6h6",
@@ -66,7 +72,16 @@ const std::string targetMoves[] = {
     "g5f6",
     "c2e4",
     "e3d2",
-    "e1e6"};
+    "e1e6",
+    "f3d4",
+    "a7c7",
+    "e4e7",
+    "d8d4",
+    "f4c7",
+    "b3f7",
+    "f7c4"
+
+   };
 
 // Test if the engine finds the expected best move for a position
 bool testPosition(const std::string &fen, const std::string &expectedMove, int depth)
