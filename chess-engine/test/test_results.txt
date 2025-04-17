@@ -1,0 +1,295 @@
+Chess Engine Test Results
+=========================
+Date: 2025-04-17 14:20:04
+Depth: 15
+
+Test #1 of 10
+Testing position: r2r2k1/pp2bppp/4b3/8/4N3/8/PPP1BPPP/R4RK1 w - - 0 1
+Expected best move: b2b3
+Depth 1, Score: 97, Nodes: 100, NPS: 866844
+Depth 2, Score: 110, Nodes: 466, NPS: 1680345
+Depth 3, Score: 101, Nodes: 1051, NPS: 1993441
+Depth 4, Score: 81, Nodes: 4444, NPS: 2400130
+Depth 5, Score: 104, Nodes: 4876, NPS: 2437365
+Depth 6, Score: 88, Nodes: 7097, NPS: 2363491
+Depth 7, Score: 86, Nodes: 10836, NPS: 2251750
+Depth 8, Score: 91, Nodes: 19449, NPS: 2164263
+Depth 9, Score: 86, Nodes: 40432, NPS: 1971721
+Depth 10, Score: 85, Nodes: 47302, NPS: 1951444
+Depth 11, Score: 85, Nodes: 49676, NPS: 1948722
+Depth 12, Score: 80, Nodes: 66631, NPS: 1924367
+Depth 13, Score: 75, Nodes: 148186, NPS: 1865181
+Depth 14, Score: 83, Nodes: 191845, NPS: 1843809
+Depth 15, Score: 77, Nodes: 248698, NPS: 1830766
+
+Time taken : 135.845 ms
+bestmove f1c1
+Time taken: 135.887 ms
+Nodes searched: 248698
+Best move found: f1c1
+-----------------------------------
+Result: FAIL
+Found: f1c1, Expected: b2b3
+-----------------------------------
+
+Test #2 of 10
+Testing position: 3k4/8/q7/5r2/8/3B4/PPP5/2KN4 b - - 0 1
+Expected best move: a6h6
+Depth 1, Score: 309, Nodes: 143, NPS: 2754078
+Depth 2, Score: 554, Nodes: 186, NPS: 3205735
+Depth 3, Score: 303, Nodes: 352, NPS: 3631224
+Depth 4, Score: 303, Nodes: 517, NPS: 4174101
+Depth 5, Score: 303, Nodes: 712, NPS: 4376340
+Depth 6, Score: 303, Nodes: 931, NPS: 4560863
+Depth 7, Score: 495, Nodes: 3143, NPS: 4286337
+Depth 8, Score: 437, Nodes: 5526, NPS: 4208714
+Depth 9, Score: 437, Nodes: 6393, NPS: 4239564
+Depth 10, Score: 513, Nodes: 10445, NPS: 4087136
+Depth 11, Score: 488, Nodes: 15976, NPS: 4032401
+Depth 12, Score: 491, Nodes: 17137, NPS: 4021120
+Depth 13, Score: 475, Nodes: 27067, NPS: 3684810
+Depth 14, Score: 517, Nodes: 28550, NPS: 3670521
+Depth 15, Score: 547, Nodes: 40434, NPS: 3335985
+
+Time taken : 12.122 ms
+bestmove a6h6
+Time taken: 12.1561 ms
+Nodes searched: 40434
+Best move found: a6h6
+-----------------------------------
+Result: PASS
+-----------------------------------
+
+Test #3 of 10
+Testing position: 3k4/8/7q/5r2/8/3B4/PPP5/1K1N4 b - - 0 1
+Expected best move: h6d2
+Depth 1, Score: 298, Nodes: 100, NPS: 4216562
+Depth 2, Score: 512, Nodes: 198, NPS: 4695837
+Depth 3, Score: 338, Nodes: 773, NPS: 4385989
+Depth 4, Score: 513, Nodes: 1040, NPS: 4643333
+Depth 5, Score: 635, Nodes: 2052, NPS: 4506740
+Depth 6, Score: 635, Nodes: 2279, NPS: 4584092
+Depth 7, Score: 669, Nodes: 2647, NPS: 4485133
+Depth 8, Score: 782, Nodes: 3137, NPS: 4407081
+Depth 9, Score: 691, Nodes: 4306, NPS: 4022904
+Depth 10, Score: 782, Nodes: 4863, NPS: 4087464
+Depth 11, Score: 789, Nodes: 8062, NPS: 3509835
+Depth 12, Score: 765, Nodes: 14560, NPS: 3205634
+Depth 13, Score: 786, Nodes: 17164, NPS: 3126910
+Depth 14, Score: 762, Nodes: 34095, NPS: 2943660
+Depth 15, Score: 759, Nodes: 37963, NPS: 2981678
+
+Time taken : 12.7324 ms
+bestmove h6d2
+Time taken: 12.7687 ms
+Nodes searched: 37963
+Best move found: h6d2
+-----------------------------------
+Result: PASS
+-----------------------------------
+
+Test #4 of 10
+Testing position: 3k4/8/8/5r2/8/3B4/PPPq4/1K1N4 w - - 0 1
+Expected best move: a2a3
+Depth 1, Score: -100, Nodes: 36, NPS: 4135079
+Depth 2, Score: -100, Nodes: 98, NPS: 5087209
+Depth 3, Score: -806, Nodes: 284, NPS: 3372761
+Depth 4, Score: -806, Nodes: 438, NPS: 3610405
+Depth 5, Score: -806, Nodes: 665, NPS: 3892986
+Depth 6, Score: -788, Nodes: 905, NPS: 4125393
+Depth 7, Score: -788, Nodes: 1361, NPS: 4143087
+Depth 8, Score: -775, Nodes: 1667, NPS: 4095309
+Depth 9, Score: -796, Nodes: 2860, NPS: 3912652
+Depth 10, Score: -775, Nodes: 4781, NPS: 3794793
+Depth 11, Score: -786, Nodes: 12422, NPS: 3286366
+Depth 12, Score: -782, Nodes: 14127, NPS: 3254841
+Depth 13, Score: -797, Nodes: 37039, NPS: 2824546
+Depth 14, Score: -786, Nodes: 44872, NPS: 2747461
+Depth 15, Score: -819, Nodes: 73316, NPS: 2705375
+
+Time taken : 27.1012 ms
+bestmove a2a3
+Time taken: 27.1369 ms
+Nodes searched: 73316
+Best move found: a2a3
+-----------------------------------
+Result: PASS
+-----------------------------------
+
+Test #5 of 10
+Testing position: r1bqk2r/ppp1bppp/2n1p3/2Pp4/3P4/2PBPN2/P4PPP/R1BQK2R b KQkq - 2 8
+Expected best move: c5d6
+Depth 1, Score: 59, Nodes: 68, NPS: 1986967
+Depth 2, Score: 15, Nodes: 692, NPS: 1612779
+Depth 3, Score: 31, Nodes: 1384, NPS: 1745841
+Depth 4, Score: 16, Nodes: 2220, NPS: 1827753
+Depth 5, Score: 21, Nodes: 3840, NPS: 1792981
+Depth 6, Score: 13, Nodes: 8492, NPS: 1707114
+Depth 7, Score: -11, Nodes: 12710, NPS: 1700277
+Depth 8, Score: -16, Nodes: 21893, NPS: 1669631
+Depth 9, Score: -10, Nodes: 34731, NPS: 1602527
+Depth 10, Score: -14, Nodes: 41651, NPS: 1592546
+Depth 11, Score: -13, Nodes: 68674, NPS: 1580591
+Depth 12, Score: -12, Nodes: 162635, NPS: 1584661
+Depth 13, Score: -19, Nodes: 329467, NPS: 1567505
+Depth 14, Score: -5, Nodes: 454586, NPS: 1571887
+Depth 15, Score: -14, Nodes: 693687, NPS: 1574605
+
+Time taken : 440.549 ms
+bestmove e6e5
+Time taken: 440.589 ms
+Nodes searched: 693687
+Best move found: e6e5
+-----------------------------------
+Result: FAIL
+Found: e6e5, Expected: c5d6
+-----------------------------------
+
+Test #6 of 10
+Testing position: 4b1k1/p5p1/7p/2qp1Q2/6P1/7P/5RK1/4rB2 b - - 2 39
+Expected best move: e8g8
+Depth 1, Score: 283, Nodes: 134, NPS: 2376055
+Depth 2, Score: 209, Nodes: 694, NPS: 2456428
+Depth 3, Score: 269, Nodes: 1795, NPS: 2854144
+Depth 4, Score: 211, Nodes: 2659, NPS: 2862787
+Depth 5, Score: 239, Nodes: 3114, NPS: 2970679
+Depth 6, Score: 224, Nodes: 8650, NPS: 2668023
+Depth 7, Score: 223, Nodes: 10556, NPS: 2735177
+Depth 8, Score: 250, Nodes: 12443, NPS: 2790401
+Depth 9, Score: 236, Nodes: 19971, NPS: 2610758
+Depth 10, Score: 228, Nodes: 36241, NPS: 2416575
+Depth 11, Score: 230, Nodes: 51937, NPS: 2332543
+Depth 12, Score: 228, Nodes: 68864, NPS: 2279439
+Depth 13, Score: 238, Nodes: 91984, NPS: 2257776
+Depth 14, Score: 216, Nodes: 141717, NPS: 2250064
+Depth 15, Score: 214, Nodes: 165449, NPS: 2240288
+
+Time taken : 73.8524 ms
+bestmove e1e3
+Time taken: 73.8868 ms
+Nodes searched: 165449
+Best move found: e1e3
+-----------------------------------
+Result: FAIL
+Found: e1e3, Expected: e8g8
+-----------------------------------
+
+Test #7 of 10
+Testing position: r2q1rk1/ppp1nppp/3p1n2/3Pp1B1/1b2P1b1/2NB1N2/PPP2PPP/R2Q1RK1 w - - 4 10
+Expected best move: g5f6
+Depth 1, Score: 84, Nodes: 220, NPS: 1582494
+Depth 2, Score: 89, Nodes: 2706, NPS: 1530105
+Depth 3, Score: 89, Nodes: 2880, NPS: 1585545
+Depth 4, Score: 63, Nodes: 6322, NPS: 1626081
+Depth 5, Score: 63, Nodes: 6700, NPS: 1638374
+Depth 6, Score: 62, Nodes: 13519, NPS: 1611944
+Depth 7, Score: 66, Nodes: 15119, NPS: 1621301
+Depth 8, Score: 61, Nodes: 20230, NPS: 1602272
+Depth 9, Score: 63, Nodes: 23954, NPS: 1625834
+Depth 10, Score: 65, Nodes: 34541, NPS: 1587510
+Depth 11, Score: 76, Nodes: 41185, NPS: 1588905
+Depth 12, Score: 75, Nodes: 446157, NPS: 1550711
+Depth 13, Score: 68, Nodes: 538762, NPS: 1549387
+Depth 14, Score: 50, Nodes: 2959171, NPS: 1526092
+Depth 15, Score: 47, Nodes: 3577907, NPS: 1530445
+
+Time taken : 2337.83 ms
+bestmove f1e1
+Time taken: 2337.87 ms
+Nodes searched: 3577907
+Best move found: f1e1
+-----------------------------------
+Result: FAIL
+Found: f1e1, Expected: g5f6
+-----------------------------------
+
+Test #8 of 10
+Testing position: r3r3/5pk1/3p3p/3Pp1p1/1Pp1n1q1/2Q1B3/1PB1NK2/3R2R1 w - - 0 41
+Expected best move: c2e4
+Depth 1, Score: 393, Nodes: 36, NPS: 1239200
+Depth 2, Score: 348, Nodes: 561, NPS: 1967965
+Depth 3, Score: 581, Nodes: 716, NPS: 1949636
+Depth 4, Score: 578, Nodes: 916, NPS: 2143025
+Depth 5, Score: 261, Nodes: 2278, NPS: 2378749
+Depth 6, Score: 148, Nodes: 3672, NPS: 2685997
+Depth 7, Score: 145, Nodes: 4177, NPS: 2771086
+Depth 8, Score: 145, Nodes: 4600, NPS: 2888739
+Depth 9, Score: 145, Nodes: 5417, NPS: 2980566
+Depth 10, Score: 145, Nodes: 6264, NPS: 3165263
+Depth 11, Score: 145, Nodes: 7628, NPS: 3277702
+Depth 12, Score: 578, Nodes: 9358, NPS: 3406325
+Depth 13, Score: 575, Nodes: 27831, NPS: 2182500
+Depth 14, Score: 433, Nodes: 276992, NPS: 1853844
+Depth 15, Score: 471, Nodes: 2475659, NPS: 1857080
+
+Time taken : 1333.09 ms
+bestmove c2e4
+Time taken: 1333.13 ms
+Nodes searched: 2475659
+Best move found: c2e4
+-----------------------------------
+Result: PASS
+-----------------------------------
+
+Test #9 of 10
+Testing position: r3r3/5pk1/3p3p/3Pp1p1/1Pp1q3/2Q1B3/1P2NK2/3R2R1 w - - 0 42
+Expected best move: e3d2
+Depth 1, Score: 581, Nodes: 87, NPS: 2938593
+Depth 2, Score: 341, Nodes: 520, NPS: 2264956
+Depth 3, Score: 546, Nodes: 826, NPS: 2434380
+Depth 4, Score: 575, Nodes: 1234, NPS: 2806899
+Depth 5, Score: 577, Nodes: 2207, NPS: 3056553
+Depth 6, Score: 574, Nodes: 4677, NPS: 3104540
+Depth 7, Score: 545, Nodes: 15665, NPS: 2513098
+Depth 8, Score: 527, Nodes: 24053, NPS: 2362550
+Depth 9, Score: 367, Nodes: 128709, NPS: 1962172
+Depth 10, Score: 526, Nodes: 151241, NPS: 1940241
+Depth 11, Score: 593, Nodes: 158785, NPS: 1942446
+Depth 12, Score: 595, Nodes: 568661, NPS: 1866578
+Depth 13, Score: 467, Nodes: 1497415, NPS: 1825492
+Depth 14, Score: 498, Nodes: 2759707, NPS: 1824114
+Depth 15, Score: 476, Nodes: 7625445, NPS: 1835851
+
+Time taken : 4153.64 ms
+bestmove e2g3
+Time taken: 4153.68 ms
+Nodes searched: 7625445
+Best move found: e2g3
+-----------------------------------
+Result: FAIL
+Found: e2g3, Expected: e3d2
+-----------------------------------
+
+Test #10 of 10
+Testing position: 8/r5k1/3p4/3P2pp/1P3p2/1K6/1P1r4/4RR2 w - - 4 52
+Expected best move: e1e6
+Depth 1, Score: 70, Nodes: 77, NPS: 2165232
+Depth 2, Score: -220, Nodes: 193, NPS: 2363429
+Depth 3, Score: 75, Nodes: 370, NPS: 2350967
+Depth 4, Score: 68, Nodes: 1139, NPS: 2655581
+Depth 5, Score: 57, Nodes: 1959, NPS: 2761940
+Depth 6, Score: 55, Nodes: 2959, NPS: 3182291
+Depth 7, Score: -12, Nodes: 9567, NPS: 2742776
+Depth 8, Score: -49, Nodes: 12702, NPS: 2727720
+Depth 9, Score: -46, Nodes: 15007, NPS: 2686087
+Depth 10, Score: -100, Nodes: 46133, NPS: 2384028
+Depth 11, Score: -71, Nodes: 111942, NPS: 2318771
+Depth 12, Score: -48, Nodes: 136482, NPS: 2346522
+Depth 13, Score: -120, Nodes: 311071, NPS: 2343901
+Depth 14, Score: -130, Nodes: 485880, NPS: 2348088
+Depth 15, Score: -112, Nodes: 625721, NPS: 2355053
+
+Time taken : 265.694 ms
+bestmove e1d1
+Time taken: 265.733 ms
+Nodes searched: 625721
+Best move found: e1d1
+-----------------------------------
+Result: FAIL
+Found: e1d1, Expected: e1e6
+-----------------------------------
+
+
+==== TEST SUMMARY ====
+Tests passed: 4/10 (40%)
+Total time: 8794 ms
