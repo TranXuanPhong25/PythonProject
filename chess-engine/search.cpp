@@ -253,7 +253,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * If we give our opponent a free move and still maintain beta, we prune
        * some nodes.
        */
-      if (ss->staticEval >= (beta - 50 * improving) && board.nonPawnMat(board.sideToMove) && (depth >= 3) &&
+      if (ss->staticEval >= (beta - 23 * improving+14) && board.nonPawnMat(board.sideToMove) && (depth >= 3) &&
           ((ss - 1)->move != NULL_MOVE) && (!ttHit || ttEntry.flag != HFALPHA || eval >= beta))
       {
          int R=3;
