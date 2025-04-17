@@ -13,7 +13,7 @@ void initLateMoveTable()
    {
       for (int played = 1; played < 64; played++)
       {
-         lmrTable[depth][played] = base + log(depth) * log(played) / division;
+         lmrTable[depth][played] = base + log(depth) * log2(played) / division;
       }
    }
 
@@ -41,7 +41,7 @@ int score_to_tt(int score, int ply)
    {
 
       return score + ply;
-   }
+   }  
 
    return score;
 }
@@ -78,6 +78,12 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
    int standPat = evaluate(board);
    if (standPat >= beta)
       return beta;
+
+   // Futility pruning in quiescence search
+   // If our standing pat plus a maximum gain doesn't reach alpha, we can skip the search
+   const int futilityMargin = 177; // A queen's value is 900, this margin is conservative
+   if (standPat + futilityMargin < alpha)
+      return alpha;
 
    if (standPat > alpha)
       alpha = standPat;
@@ -121,6 +127,19 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
       {
          continue;
       }
+
+      // Futility pruning for each move
+      // If the piece we're capturing plus our current standing pat won't exceed alpha, skip
+      if (moveCount > 0 && !board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+      {
+         // Get the captured piece value
+         int capturedValue = PIECE_VALUES[board.pieceAtB(to(move))];
+
+         // If capturing the best piece possible doesn't bring us above alpha, skip
+         if (standPat + capturedValue + 140 < alpha)
+            continue;
+      }
+
       ss->continuationHistory = &st.continuationHistory[ss->movedPice][to(move)];
 
       board.makeMove(move);
@@ -260,7 +279,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          // https://www.chessprogramming.org/Null_Move_Pruning_Test_Results
          if(popcount(board.occUs)>2) R=4;
          R =  depth / 3 + std::min(3, (eval - beta) / 180);
-
+         
          ss->continuationHistory = &st.continuationHistory[None][0];
          board.makeNullMove();
          ss->move = NULL_MOVE;
@@ -358,7 +377,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
       Movegen::legalmoves<Black, ALL>(board, moves);
 
    Movelist quietList;
-   
+
    // Step 7: Scoring moves for ordering moves
    scoreMoves(st, moves, ss, ttEntry.move);
 
@@ -413,8 +432,9 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
             }
 
             // Continuation History pruning
-            if (lmrDepth < 3 && history < -4000 * depth)
+            if (lmrDepth < 4 && history < -4000 * depth && (ss - 1)->staticScore > 0 && counterHist < 0)
             {
+               skipQuietMove = true;
                continue;
             }
 
@@ -423,7 +443,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
              * will hold above beta.
              * https://www.chessprogramming.org/Futility_Pruning
              */
-            if (lmrDepth <= 6 && !inCheck && eval + 217 + 71 * depth <= alpha)
+            if (lmrDepth <= 6 && !inCheck && ss->staticEval + 150 + 24 * depth <= alpha)
             {
                skipQuietMove = true;
             }
@@ -435,15 +455,13 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
             }
          }
          else
-         {
             // SEE pruning for noisy
-            if (depth <= 6 && !see(board, move, -15 * depth * depth))
+            if ( !see(board, move, -15 * depth * depth))
             {
                continue;
             }
-         }
       }
-    
+
       // TODO: try to group ss update
       ss->continuationHistory = &st.continuationHistory[ss->movedPice][to(move)];
 
@@ -482,13 +500,17 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          reduction += !improving;                                /* Increase reduction if we're not improving. */
          reduction += !isPVNode;                                 /* Increase for non pv nodes */
          reduction += isQuiet && !see(board, move, -50 * depth); /* Increase for quiet moves that lose material */
-
+         reduction += isQuiet && !givesCheck;                   /* Increase for quiet moves that don't give check */
+         // reduction += (isQuiet&&cutnode)*2;
          // Reduce two plies if it's a counter or killer
          reduction -= refutationMove * 2;
 
          // Reduce or Increase according to history score
          reduction -= history / 4000;
+  
 
+         // Decrease/increase reduction for moves with a good/bad history (~30 Elo)
+         reduction -= ss->staticScore / 16000;
          /* Adjust the reduction so we don't drop into Qsearch or cause an
           * extension*/
          reduction = std::min(depth - 1, std::max(1, reduction));
@@ -498,9 +520,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          /* We do a full depth research if our score beats alpha that maybe promising. */
          doFullSearch = score > alpha && reduction != 1;
 
-         // bool deeper = score > bestScore + 70 + 12 * (depth - reduction);
-
-         // depth += deeper;
+        
       }
 
       /* Full depth search on a zero window. */
