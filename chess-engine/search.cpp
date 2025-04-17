@@ -253,11 +253,13 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * If we give our opponent a free move and still maintain beta, we prune
        * some nodes.
        */
-      if (ss->staticEval >= (beta - 76 * improving) && board.nonPawnMat(board.sideToMove) && (depth >= 3) &&
+      if (ss->staticEval >= (beta - 50 * improving) && board.nonPawnMat(board.sideToMove) && (depth >= 3) &&
           ((ss - 1)->move != NULL_MOVE) && (!ttHit || ttEntry.flag != HFALPHA || eval >= beta))
       {
-
-         int R = 3 + depth / 3 + std::min(3, (eval - beta) / 180);
+         int R=3;
+         // https://www.chessprogramming.org/Null_Move_Pruning_Test_Results
+         if(popcount(board.occUs)>2) R=4;
+         R =  depth / 3 + std::min(3, (eval - beta) / 180);
 
          ss->continuationHistory = &st.continuationHistory[None][0];
          board.makeNullMove();
