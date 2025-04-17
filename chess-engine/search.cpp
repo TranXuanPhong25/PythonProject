@@ -396,7 +396,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
       {
 
          // Get precalculated lmr depth from lmrTable
-         int lmrDepth = lmrTable[std::min(depth, 63)][std::min(moveCount, 63)];
+         int lmrDepth = lmrTable[std::min(depth, MAXDEPTH)][std::min(moveCount, MAXDEPTH)];
 
          // Pruning for quiets
          if (isQuiet)
@@ -424,7 +424,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
              * will hold above beta.
              * https://www.chessprogramming.org/Futility_Pruning
              */
-            if (lmrDepth <= 6 && !inCheck && eval + 120 + 71 * depth <= alpha)
+            if (lmrDepth <= 6 && !inCheck && eval + 217 + 71 * depth <= alpha)
             {
                skipQuietMove = true;
             }

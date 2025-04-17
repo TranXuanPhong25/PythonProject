@@ -118,10 +118,10 @@ int evaluate(const Board &board)
       score -= 20;
    
    //  //Evaluate PawnStructure
-   score +=  evaluatePawnStructure(board);
+   score += (board.sideToMove == White ? evaluatePawnStructure(board) : -evaluatePawnStructure(board));
    
    //Evaluate center control
-   score += evaluateCenterControl(board) ;
+   score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
 
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
