@@ -10,6 +10,9 @@ load_dotenv()
 # Cấu hình Pygame
 LAST_MOVE = (255, 255, 0, 10)  # Light yellow color for last move highlighting
 pygame.init()
+pygame.mixer.init()  # Initialize Pygame mixer for sound effects
+MOVE_SOUND = pygame.mixer.Sound("assets/sounds/move.mp3")  # Path to move sound effect
+CAPTURE_SOUND = pygame.mixer.Sound("assets/sounds/capture.mp3")  # Path to capture sound effect
 WIDTH, HEIGHT = 1040, 860  # Increased width to accommodate the sidebar
 BOARD_WIDTH = 840
 SQUARE_SIZE = 100
@@ -372,8 +375,16 @@ def draw_board(screen, board, selected_square, player_time, ai_time, depth, last
 
 
 
+def play_move_sound(board, move):
+    """Play appropriate sound for a move."""
+    if board.is_capture(move):
+        CAPTURE_SOUND.play()
+    else:
+        MOVE_SOUND.play()
+
+
 def start_animation(board, move):
-    """Start piece animation"""
+    """Start piece animation and play move sound."""
     global animating, animation_start_time, animation_piece, animation_from_pos, animation_to_pos
     global animation_from_square, animation_to_square, animation_duration
 
@@ -395,6 +406,9 @@ def start_animation(board, move):
 
         move_distance = max(abs(from_col - to_col), abs(from_row - to_row))
         animation_duration = 0.2 + (move_distance * 0.05)
+
+        # Play move sound
+        play_move_sound(board, move)
 
 
 def trigger_undo_redo_effect(squares, is_undo=True):
