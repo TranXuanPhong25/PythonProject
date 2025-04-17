@@ -424,7 +424,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
              * will hold above beta.
              * https://www.chessprogramming.org/Futility_Pruning
              */
-            if (lmrDepth <= 6 && !inCheck && eval + 217 + 71 * depth <= alpha)
+            if (lmrDepth <= 6 && !inCheck && eval + 120 + 71 * depth <= alpha)
             {
                skipQuietMove = true;
             }
