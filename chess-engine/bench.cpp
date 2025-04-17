@@ -74,13 +74,12 @@ int main()
    {
       iterativeDeepening(st, d);
    }
-   // benchPerft(maxDepth);
-   // auto start = std::chrono::high_resolution_clock::now();
+   auto start = std::chrono::high_resolution_clock::now();
 
    benchSearch(maxDepth);
-   // auto end = std::chrono::high_resolution_clock::now();
+   auto end = std::chrono::high_resolution_clock::now();
 
-   // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-   // std::cout << "\nTotal time taken for all positions: " << duration << " ms" << std::endl;
+   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+   std::cout << "\nTotal time taken for all positions: " << duration << " ms" << std::endl;
    return 0;
 }

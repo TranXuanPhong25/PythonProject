@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <math.h>
 using namespace Chess;
-using HistoryTable = std::array<std::array<int16_t, NSQUARES>, NPIECES>;
+using HistoryTable = std::array<std::array<int16_t, 64>, 13>;
 
 const int RFPMargin = 75;
 const int RFPDepth = 5;
@@ -41,7 +41,7 @@ struct SearchThread
 {
    Board board;
    HistoryTable searchHistory;
-   HistoryTable continuationHistory[NPIECES][NSQUARES];
+   HistoryTable continuationHistory[13][64];
 
    uint64_t nodes = 0;
    Move bestMove = NO_MOVE;

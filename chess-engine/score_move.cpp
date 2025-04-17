@@ -158,11 +158,9 @@ void updateHistories(SearchThread &st, SearchStack *ss, Move bestmove, Movelist 
 
 int getHistoryScores(int &his, int &ch, int &fmh, SearchThread &st, SearchStack *ss, const Move move)
 {
-    Move previous_move = (ss - 1)->move;
-    Move previous_previous_move = (ss - 2)->move;
     Piece moved_piece = st.board.pieceAtB(from(move));
 
-    his = st.searchHistory[st.board.pieceAtB(from(move))][to(move)];
+    his = st.searchHistory[moved_piece][to(move)];
 
     ch = (ss - 1)->move ? (*(ss - 1)->continuationHistory)[moved_piece][to(move)] : 0;
     fmh = (ss - 2)->move ? (*(ss - 2)->continuationHistory)[moved_piece][to(move)] : 0;
