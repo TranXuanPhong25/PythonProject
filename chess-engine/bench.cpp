@@ -44,7 +44,9 @@ const std::string positions[] = {
     "r2r2k1/pp2bppp/4b3/8/4N3/8/PPP1BPPP/R4RK1 w - - 0 1", // b2b3
     "3k4/8/q7/5r2/8/3B4/PPP5/2KN4 b - - 0 1",
     "3k4/8/7q/5r2/8/3B4/PPP5/1K1N4 b - - 0 1",
-    "3k4/8/8/5r2/8/3B4/PPPq4/1K1N4 w - - 0 1"
+    "3k4/8/8/5r2/8/3B4/PPPq4/1K1N4 w - - 0 1", //a2a3
+    "r1bqk2r/ppp1bppp/2n1p3/2Pp4/3P4/2PBPN2/P4PPP/R1BQK2R b KQkq - 2 8", //a8g8
+    "4b1k1/p5p1/7p/2qp1Q2/6P1/7P/5RK1/4rB2 b - - 2 39"//c5d6
 };
 // Benchmark the speed of your search algorithm
 void benchSearch(int depth)
