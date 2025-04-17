@@ -4,15 +4,18 @@
 #include "chess.hpp"
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
-inline int squareToIndex(Square sq)
-{
-   return (7 - square_rank(sq)) * 8 + square_file(sq);
+// Square mapping is critical for evaluation symmetry
+inline int mapToTableIndex(Square sq) {
+    // Our piece-square tables are defined with A8=0, H8=7, A1=56, H1=63
+    // This matches directly with the PST definitions
+    return (7 - square_rank(sq)) * 8 + square_file(sq);
 }
 
-// Get flipped square for black pieces (to use same tables for both colors)
-inline int getFlippedSquare(Square sq)
-{
-   return squareToIndex(sq) ^ 56; // Flips vertically
+// Flips a square from white's perspective to black's perspective
+inline int flipSquareVertically(Square sq) {
+    // For symmetry, black pieces need to see the board flipped vertically
+    // A1 (rank 0) becomes A8 (rank 7), etc.
+    return square_file(sq) + (7 - square_rank(sq)) * 8;
 }
 
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
@@ -33,7 +36,6 @@ int evaluate(const Board &board)
 {
    int score = 0;
    float endgameWeight = getGamePhase(board);
-
       
    // Material counting using bitboards for efficiency
    for (PieceType pt = PAWN; pt <= KING; ++pt)
@@ -47,28 +49,29 @@ int evaluate(const Board &board)
            Square sq = static_cast<Square>(pop_lsb(whitePieces));
            score += PIECE_VALUES[pt];
 
-           int idx = squareToIndex(sq);
+           // Direct table mapping for white pieces
+           int tableIdx = mapToTableIndex(sq);
 
            switch (pt)
            {
            case PAWN:
-               score += PAWN_PST[idx];
+               score += PAWN_PST[tableIdx];
                break;
            case KNIGHT:
-               score += KNIGHT_PST[idx];
+               score += KNIGHT_PST[tableIdx];
                break;
            case BISHOP:
-               score += BISHOP_PST[idx];
+               score += BISHOP_PST[tableIdx];
                break;
            case ROOK:
-               score += ROOK_PST[idx];
+               score += ROOK_PST[tableIdx];
                break;
            case QUEEN:
-               score += QUEEN_PST[idx];
+               score += QUEEN_PST[tableIdx];
                break;
            case KING:
-               score += KING_MG_PST[idx] * (1.0f - endgameWeight) +
-                        KING_EG_PST[idx] * endgameWeight;
+               score += KING_MG_PST[tableIdx] * (1.0f - endgameWeight) +
+                        KING_EG_PST[tableIdx] * endgameWeight;
                break;
            }
        }
@@ -79,53 +82,54 @@ int evaluate(const Board &board)
            Square sq = static_cast<Square>(pop_lsb(blackPieces));
            score -= PIECE_VALUES[pt];
 
-           int flippedIdx = getFlippedSquare(sq);
+           // For black pieces, we need to flip the square vertically
+           // This ensures proper symmetry when using the same tables
+           Square flipped_sq = static_cast<Square>(flipSquareVertically(sq));
+           int tableIdx = mapToTableIndex(flipped_sq);
 
            switch (pt)
            {
            case PAWN:
-               score -= PAWN_PST[flippedIdx];
+               score -= PAWN_PST[tableIdx];
                break;
            case KNIGHT:
-               score -= KNIGHT_PST[flippedIdx];
+               score -= KNIGHT_PST[tableIdx];
                break;
            case BISHOP:
-               score -= BISHOP_PST[flippedIdx];
+               score -= BISHOP_PST[tableIdx];
                break;
            case ROOK:
-               score -= ROOK_PST[flippedIdx];
+               score -= ROOK_PST[tableIdx];
                break;
            case QUEEN:
-               score -= QUEEN_PST[flippedIdx]; 
+               score -= QUEEN_PST[tableIdx]; 
                break;
            case KING:
-               score -= KING_MG_PST[flippedIdx] * (1.0f - endgameWeight) +
-                        KING_EG_PST[flippedIdx] * endgameWeight;
+               score -= KING_MG_PST[tableIdx] * (1.0f - endgameWeight) +
+                        KING_EG_PST[tableIdx] * endgameWeight;
                break;
            }
        }
    }
 
-   // Bishop pair bonus
+   // Bishop pair bonus - exactly balanced for both sides
    if (popcount(board.pieces(BISHOP, White)) >= 2)
       score += 30;
    if (popcount(board.pieces(BISHOP, Black)) >= 2)
       score -= 30;
 
-   // Rook pair bonus
+   // Rook pair bonus - exactly balanced for both sides
    if (popcount(board.pieces(ROOK, White)) >= 2)
       score += 20;
    if (popcount(board.pieces(ROOK, Black)) >= 2)
       score -= 20;
    
-   // Evaluate pawn structure
-   score += evaluatePawnStructure(board);
-   
-   // Evaluate center control
-   score += evaluateCenterControl(board);
-   
-   // NEW: Evaluate attacks and tactical features
-   score += evaluateAttacks(board);
+   // Ensure pawn structure evaluation is balanced
+   int pawnScore = evaluatePawnStructure(board);
+   int centerScore = evaluateCenterControl(board);
+   int attackScore = evaluateAttacks(board);
+
+   score += pawnScore + centerScore + attackScore;
 
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
