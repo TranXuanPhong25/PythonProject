@@ -2,6 +2,7 @@
 #include <bits/unique_ptr.h>
 #include <fstream>
 #include <iomanip>
+#include "tunable_params.hpp"
 
 TranspositionTable *table;
 const std::string positions[] = {
@@ -60,7 +61,11 @@ const std::string positions[] = {
       "3r4/2R5/1k3pp1/p7/B6p/2b2P1P/5P1B/5K2 b - - 5 57",
       "r3r1k1/1p1bn1pp/4p3/pPPp1p2/P2P1q2/3B1N2/2Q2RPP/4R1K1 b - - 1 22",
       "r3b1k1/1p4p1/7p/pPP1Q3/P2P4/1q6/2B2RPP/6K1 b - - 6 35",
-      "r5k1/1p3bp1/7p/pPP5/P2PQ3/8/2B3PP/6K1 b - - 1 37"
+      "r5k1/1p3bp1/7p/pPP5/P2PQ3/8/2B3PP/6K1 b - - 1 37",
+      "rn2Rb1r/2k2ppp/p1P2q2/1p6/2p1Q3/2P2B1P/P4PP1/1RB3K1 b - - 1 19",
+      "r1bq1rk1/ppp2ppp/5n2/3pb3/8/P1NBP3/1PP2PPP/R1BQ1RK1 w - - 0 10",
+      "r3r1k1/pppq1ppp/8/3p2P1/2b1nP2/P1P1PB2/1BP4P/R2QR1K1 w - - 3 18",
+      "r3r1k1/ppp2ppp/8/3p2P1/2b1nP2/P1P1PB1q/1BP4P/1R1QR1K1 w - - 5 19"
    };
 const std::string targetMoves[] = {
     "b2b3",
@@ -79,8 +84,11 @@ const std::string targetMoves[] = {
     "d8d4",
     "f4c7",
     "b3f7",
-    "f7c4"
-
+    "f7c4",
+      "g7g5",
+      "f2f4",
+      "f3g2",
+      "f3g2"
    };
 
 // Test if the engine finds the expected best move for a position
@@ -94,13 +102,8 @@ bool testPosition(const std::string &fen, const std::string &expectedMove, int d
 
    auto startime = std::chrono::high_resolution_clock::now();
 
-  
+   
    iterativeDeepening(st, depth);
-   auto endtime = std::chrono::high_resolution_clock::now();
-   std::chrono::duration<double> elapsed = endtime - startime;
-   std::cout << "Time taken: " << elapsed.count() * 1000 << " ms" << std::endl;
-   std::cout << "Nodes searched: " << st.nodes << std::endl;
-   std::cout << "Best move found: " << convertMoveToUci(st.bestMove) << std::endl;
    std::cout << "-----------------------------------" << std::endl;
    // Convert found move to UCI format and check if it matches expected
    std::string foundMove = convertMoveToUci(st.bestMove);
@@ -177,7 +180,16 @@ void runTests(int depth)
 
 
 int main(int argc, char *argv[])
-{
+{   // Load optimized parameters from benchmark_best_params.txt at initialization
+   if (TunableParams::load_params("benchmark_best_params.txt")) {
+      std::cout << "Loaded optimized parameters from benchmark_best_params.txt" << std::endl;
+   } else if (TunableParams::load_params("test/params/benchmark_best_params.txt")) {
+      std::cout << "Loaded optimized parameters from test/params/benchmark_best_params.txt" << std::endl;
+   } else if (TunableParams::load_params("tunable_params_current.txt")) {
+      std::cout << "Loaded optimized parameters from tunable_params_current.txt" << std::endl;
+   } else {
+      std::cout << "Using default search parameters" << std::endl;
+   }
    initLateMoveTable();
 
    int testDepth = 15; // Default test depth
@@ -185,7 +197,7 @@ int main(int argc, char *argv[])
    // Create and initialize TT
    auto ttable = std::make_unique<TranspositionTable>();
    table = ttable.get();
-   table->Initialize(512);
+   table->Initialize(64);
 
    auto start = std::chrono::high_resolution_clock::now();
    runTests(testDepth);

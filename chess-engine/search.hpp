@@ -69,5 +69,12 @@ struct SearchThread
 void initLateMoveTable();
 int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, bool cutnode);
 int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss);
+
+// Original non-templated function (kept for backward compatibility)
 void iterativeDeepening(SearchThread &st, const int &maxDepth);
+
+// New templated version with printInfo parameter
+template<bool printInfo>
+void iterativeDeepening(SearchThread &st, const int &maxDepth);
+
 int aspirationWindow(int prevEval, int depth, SearchThread& st, Move& bestmove);

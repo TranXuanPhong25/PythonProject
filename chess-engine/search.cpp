@@ -1,5 +1,5 @@
 #include "search.hpp"
-
+#include "tunable_params.hpp" // Make sure to include this
 #include "score_move.hpp"
 
 int lmrTable[MAXDEPTH][NSQUARES] = {{0}};
@@ -7,8 +7,23 @@ int lmpTable[2][8] = {{0}};
 
 void initLateMoveTable()
 {
-   float base = LMRBase / 100.0f;
-   float division = LMRDivision / 100.0f;
+   std::cout<<"TunableParams::LMR_BASE: " << TunableParams::LMR_BASE << std::endl;
+   std::cout<<"TunableParams::LMR_DIVISION: " << TunableParams::LMR_DIVISION << std::endl;
+   std::cout<<"TunableParams::NMP_BASE: " << TunableParams::NMP_BASE << std::endl;
+   std::cout<<"TunableParams::NMP_DIVISION: " << TunableParams::NMP_DIVISION << std::endl;
+   std::cout<<"TunableParams::NMP_MARGIN: " << TunableParams::NMP_MARGIN << std::endl;
+   std::cout<<"TunableParams::LMP_DEPTH_THRESHOLD: " << TunableParams::LMP_DEPTH_THRESHOLD << std::endl;
+   std::cout<<"TunableParams::FUTILITY_MARGIN: " << TunableParams::FUTILITY_MARGIN << std::endl;
+   std::cout<<"TunableParams::FUTILITY_DEPTH: " << TunableParams::FUTILITY_DEPTH << std::endl;
+   std::cout<<"TunableParams::FUTILITY_IMPROVING: " << TunableParams::FUTILITY_IMPROVING << std::endl;
+   std::cout<<"TunableParams::QS_FUTILITY_MARGIN: " << TunableParams::QS_FUTILITY_MARGIN << std::endl;
+   std::cout<<"TunableParams::SEE_QUIET_MARGIN_BASE: " << TunableParams::SEE_QUIET_MARGIN_BASE << std::endl;
+   std::cout<<"TunableParams::SEE_NOISY_MARGIN_BASE: " << TunableParams::SEE_NOISY_MARGIN_BASE << std::endl;
+   std::cout<<"TunableParams::ASPIRATION_DELTA: " << TunableParams::ASPIRATION_DELTA << std::endl;
+   std::cout<<"TunableParams::HISTORY_PRUNING_THRESHOLD: " << TunableParams::HISTORY_PRUNING_THRESHOLD << std::endl;
+
+   float base = TunableParams::LMR_BASE / 100.0f;
+   float division = TunableParams::LMR_DIVISION / 100.0f;
    for (int depth = 1; depth < MAXDEPTH; depth++)
    {
       for (int played = 1; played < 64; played++)
@@ -81,7 +96,7 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 
    // Futility pruning in quiescence search
    // If our standing pat plus a maximum gain doesn't reach alpha, we can skip the search
-   const int futilityMargin = 177; // A queen's value is 900, this margin is conservative
+   const int futilityMargin = TunableParams::QS_FUTILITY_MARGIN; // Was hardcoded as 177
    if (standPat + futilityMargin < alpha)
       return alpha;
 
@@ -136,7 +151,7 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
          int capturedValue = PIECE_VALUES[board.pieceAtB(to(move))];
 
          // If capturing the best piece possible doesn't bring us above alpha, skip
-         if (standPat + capturedValue + 140 < alpha)
+         if (standPat + capturedValue + TunableParams::QS_FUTILITY_MARGIN < alpha) // Was hardcoded as 140
             continue;
       }
 
@@ -263,7 +278,9 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * allows us to prune more nodes.
        * https://www.chessprogramming.org/Reverse_Futility_Pruning
        */
-      if (depth <= 8 && eval >= beta && eval - ((depth - improving) * 77) - (ss - 1)->staticScore / 400 >= beta)
+      if (depth <= TunableParams::RFP_DEPTH && eval >= beta && 
+          eval - ((depth - improving) * TunableParams::RFP_MARGIN) - 
+          (ss - 1)->staticScore / 400 >= beta)
       {
          return eval; // fail soft
       }
@@ -272,13 +289,14 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * If we give our opponent a free move and still maintain beta, we prune
        * some nodes.
        */
-      if (ss->staticEval >= (beta - 23 * improving+14) && board.nonPawnMat(board.sideToMove) && (depth >= 3) &&
+      if (ss->staticEval >= (beta - TunableParams::NMP_MARGIN * improving + TunableParams::RFP_IMPROVING_BONUS) && 
+          board.nonPawnMat(board.sideToMove) && (depth >= TunableParams::NMP_BASE) &&
           ((ss - 1)->move != NULL_MOVE) && (!ttHit || ttEntry.flag != HFALPHA || eval >= beta))
       {
-         int R=3;
+         int R = TunableParams::NMP_BASE;
          // https://www.chessprogramming.org/Null_Move_Pruning_Test_Results
-         if(popcount(board.occUs)>2) R=4;
-         R =  depth / 3 + std::min(3, (eval - beta) / 180);
+         if(popcount(board.occUs) > 2) R = TunableParams::NMP_BASE + 1;
+         R = depth / TunableParams::NMP_DIVISION + std::min(3, (eval - beta) / 180);
          
          ss->continuationHistory = &st.continuationHistory[None][0];
          board.makeNullMove();
@@ -425,14 +443,14 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
              * If we have searched many moves, we can skip the rest.
              * https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning
              */
-            if (!inCheck && !isPVNode && depth <= 7 && quietList.size >= lmpTable[improving][depth])
+            if (!inCheck && !isPVNode && depth <= TunableParams::LMP_DEPTH_THRESHOLD && quietList.size >= lmpTable[improving][depth])
             {
                skipQuietMove = true;
                continue;
             }
 
             // Continuation History pruning
-            if (lmrDepth < 4 && history < -4000 * depth && (ss - 1)->staticScore > 0 && counterHist < 0)
+            if (lmrDepth < 4 && history < -TunableParams::HISTORY_PRUNING_THRESHOLD * depth && (ss - 1)->staticScore > 0 && counterHist < 0)
             {
                skipQuietMove = true;
                continue;
@@ -443,20 +461,21 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
              * will hold above beta.
              * https://www.chessprogramming.org/Futility_Pruning
              */
-            if (lmrDepth <= 6 && !inCheck && ss->staticEval + 150 + 24 * depth <= alpha)
+            if (lmrDepth <= TunableParams::FUTILITY_DEPTH && !inCheck && 
+                ss->staticEval + TunableParams::FUTILITY_MARGIN + TunableParams::FUTILITY_IMPROVING * depth <= alpha)
             {
                skipQuietMove = true;
             }
 
             // SEE pruning for quiets
-            if (depth <= 8 && !see(board, move, -70 * depth))
+            if (depth <= TunableParams::FUTILITY_DEPTH && !see(board, move, TunableParams::SEE_QUIET_MARGIN_BASE * depth))
             {
                continue;
             }
          }
          else
             // SEE pruning for noisy
-            if ( !see(board, move, -15 * depth * depth))
+            if (!see(board, move, TunableParams::SEE_NOISY_MARGIN_BASE * depth * depth))
             {
                continue;
             }
@@ -589,6 +608,8 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
    return bestScore;
 }
 
+// Template implementation of iterativeDeepening with printInfo parameter
+template<bool printInfo>
 void iterativeDeepening(SearchThread &st, const int &maxDepth)
 {
    st.clear();
@@ -603,24 +624,41 @@ void iterativeDeepening(SearchThread &st, const int &maxDepth)
    {
       score = aspirationWindow(score, depth, st, bestMove);
       bestMove = st.bestMove;
+      
+      if constexpr (printInfo) {
+         auto endtime = std::chrono::high_resolution_clock::now();
+         std::chrono::duration<double> elapsed = endtime - startime;
+         std::cout << "Depth " << depth << ", Score: " << score
+                   << ", Nodes: " << st.nodes
+                   << ", NPS: " << static_cast<uint64_t>(st.nodes / elapsed.count()) << std::endl;
+      }
+   }
+   
+   if constexpr (printInfo) {
       auto endtime = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> elapsed = endtime - startime;
-      std::cout << "Depth " << depth << ", Score: " << score
-                << ", Nodes: " << st.nodes
-                << ", NPS: " << static_cast<uint64_t>(st.nodes / elapsed.count()) << std::endl;
+      std::cout << "\nTime taken : " << elapsed.count() * 1000 << " ms" << std::endl;
+      std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
    }
-   auto endtime = std::chrono::high_resolution_clock::now();
-   std::chrono::duration<double> elapsed = endtime - startime;
-   std::cout << "\nTime taken : " << elapsed.count() * 1000 << " ms" << std::endl;
-   std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
 }
+
+// Explicit instantiations for both versions
+template void iterativeDeepening<true>(SearchThread &st, const int &maxDepth);
+template void iterativeDeepening<false>(SearchThread &st, const int &maxDepth);
+
+// Original function - now just forwards to the templated version with printInfo=true
+void iterativeDeepening(SearchThread &st, const int &maxDepth)
+{
+   iterativeDeepening<true>(st, maxDepth);
+}
+
 int aspirationWindow(int prevEval, int depth, SearchThread &st, Move &bestmove)
 {
    int score = 0;
 
    SearchStack stack[MAXPLY + 10], *ss = stack + 7;
 
-   int delta = 12;
+   int delta = TunableParams::ASPIRATION_DELTA; // Was hardcoded as 12
 
    int alpha = -INF_BOUND;
    int beta = INF_BOUND;

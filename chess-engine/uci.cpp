@@ -10,7 +10,7 @@ static void uci_send_id()
 }
 
 
-int DefaultHashSize = 258;
+int DefaultHashSize = 64;
 int CurrentHashSize = DefaultHashSize;
 int LastHashSize = CurrentHashSize;
 
@@ -20,6 +20,7 @@ TranspositionTable *table;
 
 void uci_loop()
 {   
+    
     SearchThread st;
     st.board = Board(DEFAULT_POS);
     std::cout << "Chess Engine Copyright (C) 2023" << std::endl;
