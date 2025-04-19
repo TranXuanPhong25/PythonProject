@@ -1,5 +1,6 @@
 #include "evaluate.hpp"
 #include "evaluate_features.hpp"
+#include "evaluate_pieces.hpp"
 #include "chess.hpp"
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
@@ -117,11 +118,13 @@ int evaluate(const Board &board)
    if (popcount(board.pieces(ROOK, Black)) >= 2)
       score -= 20;
    
+    score += evaluatePieces(board);
+
    //  //Evaluate PawnStructure
-   score += (board.sideToMove == White ? evaluatePawnStructure(board) : -evaluatePawnStructure(board));
+   score += evaluatePawnStructure(board);
    
    //Evaluate center control
-   score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
+   score += evaluateCenterControl(board);
 
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
