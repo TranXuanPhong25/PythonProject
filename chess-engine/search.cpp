@@ -7,20 +7,20 @@ int lmpTable[2][8] = {{0}};
 
 void initLateMoveTable()
 {
-   std::cout<<"TunableParams::LMR_BASE: " << TunableParams::LMR_BASE << std::endl;
-   std::cout<<"TunableParams::LMR_DIVISION: " << TunableParams::LMR_DIVISION << std::endl;
-   std::cout<<"TunableParams::NMP_BASE: " << TunableParams::NMP_BASE << std::endl;
-   std::cout<<"TunableParams::NMP_DIVISION: " << TunableParams::NMP_DIVISION << std::endl;
-   std::cout<<"TunableParams::NMP_MARGIN: " << TunableParams::NMP_MARGIN << std::endl;
-   std::cout<<"TunableParams::LMP_DEPTH_THRESHOLD: " << TunableParams::LMP_DEPTH_THRESHOLD << std::endl;
-   std::cout<<"TunableParams::FUTILITY_MARGIN: " << TunableParams::FUTILITY_MARGIN << std::endl;
-   std::cout<<"TunableParams::FUTILITY_DEPTH: " << TunableParams::FUTILITY_DEPTH << std::endl;
-   std::cout<<"TunableParams::FUTILITY_IMPROVING: " << TunableParams::FUTILITY_IMPROVING << std::endl;
-   std::cout<<"TunableParams::QS_FUTILITY_MARGIN: " << TunableParams::QS_FUTILITY_MARGIN << std::endl;
-   std::cout<<"TunableParams::SEE_QUIET_MARGIN_BASE: " << TunableParams::SEE_QUIET_MARGIN_BASE << std::endl;
-   std::cout<<"TunableParams::SEE_NOISY_MARGIN_BASE: " << TunableParams::SEE_NOISY_MARGIN_BASE << std::endl;
-   std::cout<<"TunableParams::ASPIRATION_DELTA: " << TunableParams::ASPIRATION_DELTA << std::endl;
-   std::cout<<"TunableParams::HISTORY_PRUNING_THRESHOLD: " << TunableParams::HISTORY_PRUNING_THRESHOLD << std::endl;
+   // std::cout << "TunableParams::LMR_BASE: " << TunableParams::LMR_BASE << std::endl;
+   // std::cout << "TunableParams::LMR_DIVISION: " << TunableParams::LMR_DIVISION << std::endl;
+   // std::cout << "TunableParams::NMP_BASE: " << TunableParams::NMP_BASE << std::endl;
+   // std::cout << "TunableParams::NMP_DIVISION: " << TunableParams::NMP_DIVISION << std::endl;
+   // std::cout << "TunableParams::NMP_MARGIN: " << TunableParams::NMP_MARGIN << std::endl;
+   // std::cout << "TunableParams::LMP_DEPTH_THRESHOLD: " << TunableParams::LMP_DEPTH_THRESHOLD << std::endl;
+   // std::cout << "TunableParams::FUTILITY_MARGIN: " << TunableParams::FUTILITY_MARGIN << std::endl;
+   // std::cout << "TunableParams::FUTILITY_DEPTH: " << TunableParams::FUTILITY_DEPTH << std::endl;
+   // std::cout << "TunableParams::FUTILITY_IMPROVING: " << TunableParams::FUTILITY_IMPROVING << std::endl;
+   // std::cout << "TunableParams::QS_FUTILITY_MARGIN: " << TunableParams::QS_FUTILITY_MARGIN << std::endl;
+   // std::cout << "TunableParams::SEE_QUIET_MARGIN_BASE: " << TunableParams::SEE_QUIET_MARGIN_BASE << std::endl;
+   // std::cout << "TunableParams::SEE_NOISY_MARGIN_BASE: " << TunableParams::SEE_NOISY_MARGIN_BASE << std::endl;
+   // std::cout << "TunableParams::ASPIRATION_DELTA: " << TunableParams::ASPIRATION_DELTA << std::endl;
+   // std::cout << "TunableParams::HISTORY_PRUNING_THRESHOLD: " << TunableParams::HISTORY_PRUNING_THRESHOLD << std::endl;
 
    float base = TunableParams::LMR_BASE / 100.0f;
    float division = TunableParams::LMR_DIVISION / 100.0f;
@@ -56,7 +56,7 @@ int score_to_tt(int score, int ply)
    {
 
       return score + ply;
-   }  
+   }
 
    return score;
 }
@@ -80,6 +80,11 @@ int score_from_tt(int score, int ply)
 int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 {
    st.nodes++;
+   /* Checking for time every 2048 nodes */
+   if (!(st.nodes & 2047))
+   {
+      st.check_time();
+   }
    /* We return static evaluation if we exceed max depth */
    Board &board = st.board;
    if (ss->ply > MAXPLY - 1)
@@ -166,6 +171,11 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 
       score = -quiescence(-beta, -alpha, st, ss + 1);
       board.unmakeMove(move);
+      /* Return 0 if time is up */
+      if (st.info.stopped)
+      {
+         return 0;
+      }
       if (score > bestScore)
       {
          bestMove = move;
@@ -198,6 +208,12 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
    // Step 1: run quiescence search if depth <=0
    if (depth <= 0)
       return quiescence(alpha, beta, st, ss);
+   /* Checking for time every 2048 nodes */
+   if ((st.nodes & 2047) == 0)
+   {
+      st.check_time();
+   }
+
    // Step 2: Helper variables
    Board &board = st.board;
 
@@ -278,9 +294,10 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * allows us to prune more nodes.
        * https://www.chessprogramming.org/Reverse_Futility_Pruning
        */
-      if (depth <= TunableParams::RFP_DEPTH && eval >= beta && 
-          eval - ((depth - improving) * TunableParams::RFP_MARGIN) - 
-          (ss - 1)->staticScore / 400 >= beta)
+      if (depth <= TunableParams::RFP_DEPTH && eval >= beta &&
+          eval - ((depth - improving) * TunableParams::RFP_MARGIN) -
+                  (ss - 1)->staticScore / 400 >=
+              beta)
       {
          return eval; // fail soft
       }
@@ -289,15 +306,16 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * If we give our opponent a free move and still maintain beta, we prune
        * some nodes.
        */
-      if (ss->staticEval >= (beta - TunableParams::NMP_MARGIN * improving + TunableParams::RFP_IMPROVING_BONUS) && 
+      if (ss->staticEval >= (beta - TunableParams::NMP_MARGIN * improving + TunableParams::RFP_IMPROVING_BONUS) &&
           board.nonPawnMat(board.sideToMove) && (depth >= TunableParams::NMP_BASE) &&
           ((ss - 1)->move != NULL_MOVE) && (!ttHit || ttEntry.flag != HFALPHA || eval >= beta))
       {
          int R = TunableParams::NMP_BASE;
          // https://www.chessprogramming.org/Null_Move_Pruning_Test_Results
-         if(popcount(board.occUs) > 2) R = TunableParams::NMP_BASE + 1;
+         if (popcount(board.occUs) > 2)
+            R = TunableParams::NMP_BASE + 1;
          R = depth / TunableParams::NMP_DIVISION + std::min(3, (eval - beta) / 180);
-         
+
          ss->continuationHistory = &st.continuationHistory[None][0];
          board.makeNullMove();
          ss->move = NULL_MOVE;
@@ -307,7 +325,10 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          int score = -negamax(-beta, -beta + 1, depth - R, st, ss + 1, !cutnode);
 
          board.unmakeNullMove();
-
+         if (st.info.stopped)
+         {
+            return 0;
+         }
          if (score >= beta)
          {
 
@@ -461,7 +482,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
              * will hold above beta.
              * https://www.chessprogramming.org/Futility_Pruning
              */
-            if (lmrDepth <= TunableParams::FUTILITY_DEPTH && !inCheck && 
+            if (lmrDepth <= TunableParams::FUTILITY_DEPTH && !inCheck &&
                 ss->staticEval + TunableParams::FUTILITY_MARGIN + TunableParams::FUTILITY_IMPROVING * depth <= alpha)
             {
                skipQuietMove = true;
@@ -519,14 +540,13 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          reduction += !improving;                                /* Increase reduction if we're not improving. */
          reduction += !isPVNode;                                 /* Increase for non pv nodes */
          reduction += isQuiet && !see(board, move, -50 * depth); /* Increase for quiet moves that lose material */
-         reduction += isQuiet && !givesCheck;                   /* Increase for quiet moves that don't give check */
+         reduction += isQuiet && !givesCheck;                    /* Increase for quiet moves that don't give check */
          // reduction += (isQuiet&&cutnode)*2;
          // Reduce two plies if it's a counter or killer
          reduction -= refutationMove * 2;
 
          // Reduce or Increase according to history score
          reduction -= history / 4000;
-  
 
          // Decrease/increase reduction for moves with a good/bad history (~30 Elo)
          reduction -= ss->staticScore / 16000;
@@ -538,8 +558,6 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
 
          /* We do a full depth research if our score beats alpha that maybe promising. */
          doFullSearch = score > alpha && reduction != 1;
-
-        
       }
 
       /* Full depth search on a zero window. */
@@ -554,14 +572,17 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
        * If we are in a PV node, we do a full window search on the first move or might improve alpha.
        * https://www.chessprogramming.org/Principal_Variation_Search
        */
-      if (isPVNode && (moveCount == 1 || (score > alpha && (isRoot||score < beta))))
+      if (isPVNode && (moveCount == 1 || (score > alpha && (isRoot || score < beta))))
       {
          score = -negamax(-beta, -alpha, depth - 1, st, ss + 1, false);
       }
 
       // Step 13: Unmake the move
       board.unmakeMove(move);
-
+      if (st.info.stopped && !isRoot)
+      {
+         return 0;
+      }
       // Step 14: Alpha-beta pruning
       if (score > bestScore)
       {
@@ -589,7 +610,10 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
             // clang-format on
          }
       }
-      
+      if (st.info.stopped && isRoot && st.bestMove != NO_MOVE)
+      {
+         break;
+      }
    }
    // Terminal node if no moves exist
    if (moveCount == 0)
@@ -609,36 +633,61 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
 }
 
 // Template implementation of iterativeDeepening with printInfo parameter
-template<bool printInfo>
+template <bool printInfo>
 void iterativeDeepening(SearchThread &st, const int &maxDepth)
 {
+   SearchInfo &info = st.info;
    st.clear();
+   st.initialize();
    table->nextAge();
 
    int score = 0;
 
-   auto startime = std::chrono::high_resolution_clock::now();
+   auto startime = st.start_time();
    Move bestMove = NO_MOVE;
 
    for (int depth = 1; depth <= maxDepth; depth++)
    {
       score = aspirationWindow(score, depth, st, bestMove);
+      if (st.info.stopped || st.stop_early())
+      {
+         break;
+      }
       bestMove = st.bestMove;
-      
-      if constexpr (printInfo) {
-         auto endtime = std::chrono::high_resolution_clock::now();
-         std::chrono::duration<double> elapsed = endtime - startime;
-         std::cout << "Depth " << depth << ", Score: " << score
-                   << ", Nodes: " << st.nodes
-                   << ", NPS: " << static_cast<uint64_t>(st.nodes / elapsed.count()) << std::endl;
+      if (info.timeset)
+      {
+         st.tm.update_tm(bestMove);
+      }
+      if constexpr (printInfo)
+      {
+        
+            auto time_elapsed = misc::tick() - startime;
+
+
+            std::cout<<"score ";
+            if (score >= ISMATED && score <= IS_MATED_IN_MAX_PLY)
+            {
+               std::cout << "mate " << ((ISMATED - score) / 2);
+            }
+            else if (score >= IS_MATE_IN_MAX_PLY && score <= ISMATE)
+            {
+               std::cout << "mate " << ((ISMATE - score) / 2);
+            }else{
+               std::cout << score;
+            }
+            std::cout << " depth " << depth;
+            std::cout << " nodes " << st.nodes;
+            std::cout << " nps " << static_cast<uint64_t>(st.nodes  / (time_elapsed/1000));
+            std::cout << " time " << static_cast<uint64_t>(time_elapsed);
+            std::cout << std::endl;
+         
+        
       }
    }
-   
-   if constexpr (printInfo) {
-      auto endtime = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> elapsed = endtime - startime;
-      std::cout << "\nTime taken : " << elapsed.count() * 1000 << " ms" << std::endl;
-      std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
+
+   if (printInfo)
+   {
+       std::cout << "bestmove " << convertMoveToUci(bestMove) << std::endl;
    }
 }
 
@@ -675,7 +724,10 @@ int aspirationWindow(int prevEval, int depth, SearchThread &st, Move &bestmove)
    {
 
       score = negamax(alpha, beta, depth, st, ss, false);
-
+      if (st.stop_early())
+      {
+         break;
+      }
       if (score <= alpha)
       {
          beta = (alpha + beta) / 2;
@@ -698,7 +750,7 @@ int aspirationWindow(int prevEval, int depth, SearchThread &st, Move &bestmove)
       {
          break;
       }
-      delta += delta / 3;
+      delta += delta / 2;
    }
 
    return score;

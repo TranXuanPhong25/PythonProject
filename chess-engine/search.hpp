@@ -8,6 +8,7 @@
 #include <memory.h>
 #include <algorithm>
 #include <math.h>
+#include "timeman.hpp"
 using namespace Chess;
 using HistoryTable = std::array<std::array<int16_t, 64>, 13>;
 
@@ -22,6 +23,16 @@ const int NMPDivision = 3;
 const int NMPMargin = 180;
 
 extern TranspositionTable *table;
+struct SearchInfo
+{
+   int32_t score = 0;
+   uint8_t depth = 0;
+   uint64_t nodes = 0;
+   bool timeset = 0;
+   bool stopped = 0;
+   bool nodeset = 0;
+   bool uci = 0;
+};
 struct SearchStack
 {
    int16_t staticEval{};
@@ -32,36 +43,74 @@ struct SearchStack
 
    Piece movedPice{None};
 
-   int staticScore = 0;
+   int staticScore;
    HistoryTable *continuationHistory;
 };
 
 // A struct to hold the search data
 struct SearchThread
 {
+   SearchInfo &info;
    Board board;
    HistoryTable searchHistory;
    HistoryTable continuationHistory[13][64];
-
    uint64_t nodes = 0;
    Move bestMove = NO_MOVE;
+   TimeMan tm;
 
-   SearchThread() : board(DEFAULT_POS)
+   SearchThread(SearchInfo &i) : info(i), board(DEFAULT_POS)
    {
       clear();
    }
 
+   inline void clear()
+   {
+      nodes = 0;
+
+      memset(searchHistory.data(), 0, sizeof(searchHistory));
+      memset(continuationHistory, 0, sizeof(continuationHistory));
+
+      tm.reset();
+   }
+
+   inline void initialize()
+   {
+      tm.start_time = misc::tick();
+
+      if (info.timeset)
+      {
+         tm.set_time(board.sideToMove);
+      }
+   }
+
+   inline Time start_time()
+   {
+      return tm.start_time;
+   }
    // Applying fen on board
    inline void applyFen(std::string fen)
    {
       board.applyFen(fen);
    }
-   inline void clear()
+ 
+   inline bool stop_early()
    {
+      if (info.timeset && (tm.stop_search() || info.stopped))
+      {
+         return true;
+      }
+      else
+      {
+         return false;
+      }
+   }
 
-      nodes = 0;
-      memset(searchHistory.data(), 0, sizeof(searchHistory));
-      memset(continuationHistory, 0, sizeof(continuationHistory));
+   void check_time()
+   {
+      if ((info.timeset && tm.check_time()) || (info.nodeset && nodes >= info.nodes))
+      {
+         info.stopped = true;
+      }
    }
 };
 
@@ -74,7 +123,7 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss);
 void iterativeDeepening(SearchThread &st, const int &maxDepth);
 
 // New templated version with printInfo parameter
-template<bool printInfo>
+template <bool printInfo>
 void iterativeDeepening(SearchThread &st, const int &maxDepth);
 
-int aspirationWindow(int prevEval, int depth, SearchThread& st, Move& bestmove);
+int aspirationWindow(int prevEval, int depth, SearchThread &st, Move &bestmove);
