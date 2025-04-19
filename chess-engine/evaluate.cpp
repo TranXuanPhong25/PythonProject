@@ -1,7 +1,7 @@
 #include "evaluate.hpp"
 #include "evaluate_features.hpp"
 #include "chess.hpp"
-
+#include "evaluate_pieces.hpp"
 // Convert from Chess::Square to 0-63 index for piece-square tables
 inline int squareToIndex(Square sq)
 {
@@ -104,7 +104,6 @@ int evaluate(const Board &board)
            }
        }
    }
-
    // Bishop pair bonus
    if (popcount(board.pieces(BISHOP, White)) >= 2)
       score += 30;
@@ -118,11 +117,11 @@ int evaluate(const Board &board)
       score -= 20;
    
    //  //Evaluate PawnStructure
-   score += (board.sideToMove == White ? evaluatePawnStructure(board) : -evaluatePawnStructure(board));
+   score +=  evaluatePawnStructure(board)*0.8 ;
    
    //Evaluate center control
-   score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
-
+   score +=  evaluateCenterControl(board) ;
+    score+= evaluatePieces(board);
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
 }
