@@ -642,15 +642,19 @@ int evaluatePiecesEg(const Board& board) {
 
 // Helper function to determine if position is in endgame
 bool isEndgame(const Board& board) {
-    // Simple endgame detection - count material without pawns
-    int materialCount = 0;
+    constexpr int KnightEg = 854;
+    constexpr int BishopEg = 915;
+    constexpr int RookEg = 1380;
+    constexpr int QueenEg = 2682;
+    constexpr int EndgameLimit = 3915;
     
-    materialCount += popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * 3;
-    materialCount += popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * 3;
-    materialCount += popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * 5;
-    materialCount += popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * 9;
+    int materialSum =
+        popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KnightEg +
+        popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BishopEg +
+        popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * RookEg +
+        popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QueenEg;
     
-    return materialCount <= 12; // Arbitrary threshold
+    return materialSum <= EndgameLimit;
 }
 
 // Main evaluation function
