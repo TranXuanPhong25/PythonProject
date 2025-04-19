@@ -226,12 +226,62 @@ void tuneParameters(const TuningConfig& config) {
     // Setup random number generator
     std::random_device rd;
     std::mt19937 rng(rd());
-    //
+    
+    // First, try to load and evaluate best parameters from benchmark_best_params.txt
+    Individual bestFromFile;
+    bestFromFile.params.resize(paramDefs.size());
+    bool bestFileLoaded = false;
+    
+    std::ifstream bestFile("test/params/benchmark_best_params.txt");
+    if (bestFile.is_open()) {
+        std::cout << "Loading parameters from benchmark_best_params.txt..." << std::endl;
+        std::string param;
+        int value;
+        int foundParams = 0;
+        
+        while (bestFile >> param >> value) {
+            for (size_t i = 0; i < paramDefs.size(); i++) {
+                if (paramDefs[i].name == param) {
+                    bestFromFile.params[i] = value;
+                    foundParams++;
+                    break;
+                }
+            }
+        }
+        bestFile.close();
+        
+        // Only consider file loaded if all parameters were found
+        if (foundParams == static_cast<int>(paramDefs.size())) {
+            std::cout << "Evaluating parameters from benchmark_best_params.txt..." << std::endl;
+            auto [correct, nodes] = evaluateParameters(bestFromFile.params, paramDefs, config.search_depth);
+            bestFromFile.fitness = correct;
+            bestFromFile.nodes = nodes;
+            int totalTests = sizeof(positions) / sizeof(positions[0]);
+            std::cout << "Fitness from file: " << bestFromFile.fitness << "/" << totalTests 
+                     << " correct moves, " << bestFromFile.nodes << " nodes" << std::endl;
+            bestFileLoaded = true;
+        } else {
+            std::cout << "Warning: benchmark_best_params.txt missing some parameters, found " 
+                     << foundParams << "/" << paramDefs.size() << std::endl;
+        }
+    } else {
+        std::cout << "Could not open benchmark_best_params.txt, starting fresh." << std::endl;
+    }
+    
     // Create initial population
     std::vector<Individual> population(config.population_size);
     std::cout << "Creating initial population..." << std::endl;
-    for (int i = 0; i < config.population_size; i++) {
-        population[i] = createRandomIndividual(paramDefs, rng);
+    
+    // If best file was loaded, use it as the first individual
+    if (bestFileLoaded) {
+        population[0] = bestFromFile;
+        for (int i = 1; i < config.population_size; i++) {
+            population[i] = createRandomIndividual(paramDefs, rng);
+        }
+    } else {
+        for (int i = 0; i < config.population_size; i++) {
+            population[i] = createRandomIndividual(paramDefs, rng);
+        }
     }
     
     // Evaluate initial population
@@ -239,11 +289,16 @@ void tuneParameters(const TuningConfig& config) {
     int totalTests = sizeof(positions) / sizeof(positions[0]);
     
     for (auto& ind : population) {
+        // Skip evaluation if it's the loaded best (already evaluated)
+        if (bestFileLoaded && &ind == &population[0]) {
+            continue;
+        }
+        
         auto [correct, nodes] = evaluateParameters(ind.params, paramDefs, config.search_depth);
         ind.fitness = correct;
         ind.nodes = nodes;
         std::cout << "Individual evaluated: " << correct << "/" << totalTests 
-                  << " correct moves, " << nodes << " nodes" << std::endl;
+                 << " correct moves, " << nodes << " nodes" << std::endl;
     }
     
     // Sort by fitness (higher is better) and then by nodes (lower is better)
@@ -253,10 +308,10 @@ void tuneParameters(const TuningConfig& config) {
         return a.nodes < b.nodes;
     });
 
-    // Best individual so far
+    // Best individual so far (either from file or from initial population)
     Individual bestEver = population[0];
     std::cout << "Initial best fitness: " << bestEver.fitness << "/" << totalTests 
-              << " correct moves, " << bestEver.nodes << " nodes" << std::endl;
+             << " correct moves, " << bestEver.nodes << " nodes" << std::endl;
     
     // Save initial parameters
     std::ofstream initialFile("test/params/benchmark_initial_params.txt");
@@ -345,15 +400,28 @@ void tuneParameters(const TuningConfig& config) {
     }
     
     // Save best parameters to file
-    std::ofstream bestFile("test/params/benchmark_best_params.txt");
+    std::ofstream bestFileO("test/params/benchmark_best_params.txt");
     for (size_t i = 0; i < paramDefs.size(); i++) {
-        bestFile << paramDefs[i].name << " " << bestEver.params[i] << std::endl;
+        bestFileO << paramDefs[i].name << " " << bestEver.params[i] << std::endl;
     }
-    bestFile.close();
+    bestFileO.close();
     
+    // Also save to benchmark_initial_params.txt for future tuning sessions
+    std::ofstream iF("test/params/benchmark_initial_params.txt");
+    for (size_t i = 0; i < paramDefs.size(); i++) {
+        iF << paramDefs[i].name << " " << bestEver.params[i] << std::endl;
+    }
+    iF.close();
     
+    // Copy the best parameters to the root directory for immediate use with make bench
+    std::ofstream rootFile("benchmark_best_params.txt");
+    for (size_t i = 0; i < paramDefs.size(); i++) {
+        rootFile << paramDefs[i].name << " " << bestEver.params[i] << std::endl;
+    }
+    rootFile.close();
     
     std::cout << "Parameters saved to test/params/benchmark_best_params.txt" << std::endl;
+    std::cout << "Parameters also saved to test/params/benchmark_initial_params.txt for future tuning" << std::endl;
     std::cout << "Parameters copied to benchmark_best_params.txt in root directory for immediate use with make bench" << std::endl;
 }
 
@@ -367,8 +435,8 @@ int main(int argc, char* argv[]) {
         .iterations = 15,        // 15 generations
         .population_size = 10,   // 20 individuals per generation
         .tournament_size = 3,    // Tournament selection size
-        .mutation_rate = 0.75,   // 25% chance to mutate each parameter
-        .search_depth = 14       // Search depth for evaluating positions
+        .mutation_rate = 0.25,   // 25% chance to mutate each parameter
+        .search_depth = 15       // Search depth for evaluating positions
     };
     
     // Parse command line arguments
