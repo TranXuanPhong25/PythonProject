@@ -1,4 +1,5 @@
 #include "evaluate_pieces.hpp"
+#include "evaluate_mobility.hpp"
 #include <algorithm>
 
 using namespace Chess;
@@ -311,7 +312,7 @@ void evaluateBishops(EvalInfo& ei, Color color) {
                 }
             }
         } else {
-            for (int r = rank - 1; r >= 0; r--) {
+            for (int r = rank - 1; r >= 0; r++) {
                 if (pawns & (1ULL << (r * 8 + file))) {
                     bonus += 5;
                     break;
@@ -579,6 +580,10 @@ int evaluatePiecesMg(const Board& board) {
     // Piece attack counters
     int whiteAttackers = 0, blackAttackers = 0;
     
+    // Evaluate mobility for both sides
+    evaluateMobility(ei, White);
+    evaluateMobility(ei, Black);
+    
     // Evaluate king safety
     evaluateKingSafety(ei, White);
     evaluateKingSafety(ei, Black);
@@ -612,6 +617,10 @@ int evaluatePiecesEg(const Board& board) {
     
     // Piece attack counters
     int whiteAttackers = 0, blackAttackers = 0;
+    
+    // Evaluate mobility for both sides
+    evaluateMobility(ei, White);
+    evaluateMobility(ei, Black);
     
     // Evaluate king safety (less important in endgame)
     evaluateKingSafety(ei, White);
