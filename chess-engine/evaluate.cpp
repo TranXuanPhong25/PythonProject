@@ -1,6 +1,7 @@
 #include "evaluate.hpp"
 #include "evaluate_features.hpp"
 #include "evaluate_pieces.hpp"
+#include "evaluate_threatEG.hpp"
 #include "chess.hpp"
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
@@ -112,19 +113,25 @@ int evaluate(const Board &board)
    if (popcount(board.pieces(BISHOP, Black)) >= 2)
       score -= 30;
 
-       // Rook pair bonus
+   // Rook pair bonus
    if (popcount(board.pieces(ROOK, White)) >= 2)
       score += 20;
    if (popcount(board.pieces(ROOK, Black)) >= 2)
       score -= 20;
    
-    score += evaluatePieces(board);
+   score += evaluatePieces(board);
 
-   //  //Evaluate PawnStructure
+   // Evaluate PawnStructure
    score += evaluatePawnStructure(board);
    
-   //Evaluate center control
+   // Evaluate center control
    score += evaluateCenterControl(board);
+   
+   // Apply threat evaluation in endgame with proper scaling based on game phase
+   if (endgameWeight > 0.0f) {
+      int threatScore = threats_endgame(board);
+      score += threatScore * endgameWeight;
+   }
 
    // Return score from perspective of side to move
    return board.sideToMove == White ? score : -score;
