@@ -17,7 +17,7 @@ inline int getFlippedSquare(Square sq)
 }
 
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
-inline float getGamePhase(const Board &board)
+float getGamePhase(const Board &board)
 {
    int remainingMaterial =
        popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +

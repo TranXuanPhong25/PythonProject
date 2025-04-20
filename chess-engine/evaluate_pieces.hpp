@@ -47,4 +47,7 @@ int evaluatePiecesEg(const Chess::Board& board);
 int evaluatePieces(const Chess::Board& board);
 bool isEndgame(const Chess::Board& board);
 
+// Import getGamePhase from evaluate.cpp
+float getGamePhase(const Chess::Board& board);
+
 #endif // EVALUATE_PIECES_HPP
