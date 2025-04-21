@@ -91,7 +91,7 @@ const int KING_EG_PST[64] = {
     -50, -30, -30, -30, -30, -30, -30, -50};
 
 // Function to determine game phase (0 = opening, 1 = endgame)
-inline float getGamePhase(const Board &board);
+float getGamePhase(const Board &board);
 
 // Evaluate function with piece-square tables
 int evaluate(const Board &board);
