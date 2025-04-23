@@ -4,6 +4,9 @@
 #include "search.hpp"
 #include "types.hpp"
 #include "see.hpp"
+#include "search.hpp"
+#define MAXHISTORY 16384
+#define MAXCOUNTERHISTORY 16384
 
 // Move scoring categories - higher values = higher priority
 
@@ -26,83 +29,14 @@ constexpr int mvv_lva[12][12] = {
    100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600
 };
 
-// Bonus for captures based on piece values
-constexpr int PieceValues[7] = {0, 100, 320, 330, 500, 900, 20000};
+void scoreMoves(SearchThread& st, Movelist &moves, SearchStack *ss, Move tt_move);
+void scoreMovesForQS(Board &board, Movelist &moves, Move tt_move);
+void pickNextMove(const int& index, Movelist &moves);
+void updateContinuationHistories(SearchStack* ss, Piece piece, Move move, int bonus);
+void updateHistories(SearchThread& st, SearchStack *ss, Move bestmove, Movelist &quietList, int depth);
 
-extern Move killerMoves[MAX_PLY][2];
+inline int historyBonus(const int& depth){
+   return std::min(2100, 300 * depth - 300);
+}
 
-// History heuristic table - tracks "quiet" moves that have been good
-// Index: [color][from][to]
-extern int historyTable[2][64][64];
-
-// Countermove history table - tracks moves that are good responses to opponent moves
-// Index: [piece][to_square] - what move was good after opponent's last move
-extern Move counterMoveTable[12][64];
-
-// Continuation history - tracks moves played after other moves
-// This is indexed by [piece][to_square][piece][to_square]
-extern int continuationHistory[12][64][12][64];
-
-// Killer move manipulation functions
-void addKillerMove(Move move, int ply);
-
-// Update history score for a move that caused a beta cutoff
-void updateHistory(Board &board, Move move, int depth, bool isCutoff);
-
-// Update countermove history for a move that was effective against last opponent move
-void updateCounterMove(Board &board, Move lastMove, Move counterMove);
-
-// Reset history scores (e.g., between games)
-void clearHistory();
-
-// Enhanced move ordering system
-// Score all moves in a list for regular search
-void scoreMoves(Movelist &moves, Board &board, Move ttMove = NO_MOVE, int ply = 0);
-
-// Score capture moves for quiescence search
-void ScoreMovesForQS(Board &board, Movelist &list, Move tt_move);
-
-// Helper to pick the next best move from an already scored list
-void pickNextMove(const int& moveNum, Movelist &list);
-
-// Update mobility score for a specific move
-void updateMobility(Board &board, Move move, int &mobilityScore, Color side);
-
-// Clear move history between searches
-void clearMoveHistory();
-
-// Get the last move played
-Move getLastMove();
-
-// New function to score a single move (useful for incremental sorting)
-int scoreSingleMove(Board &board, Move move, Move ttMove, int ply);
-
-// Move stage enum for staged move selection
-enum MoveStage {
-    TT_MOVE,        // Transposition table move
-    GOOD_CAPTURES,  // Captures with positive SEE
-    KILLER_MOVES,   // Killer moves
-    COUNTER_MOVES,  // Counter moves
-    QUIET_MOVES,    // Quiet moves with good history
-    BAD_CAPTURES,   // Captures with negative SEE
-    REMAINING_MOVES // Any other moves
-};
-
-// Class for staged move generation
-class StagedMoveGenerator {
-private:
-    Board &board;
-    Movelist &moves;
-    int currentStage;
-    int currentMoveIndex;
-    Move ttMove;
-    int ply;
-    bool ttMoveSearched;
-    
-public:
-    StagedMoveGenerator(Board &b, Movelist &m, Move tt = NO_MOVE, int p = 0);
-    Move nextMove();
-    bool hasNext() const;
-};
-
-
+int getHistoryScores(int& his, int& ch, int& fmh, SearchThread& st, SearchStack *ss, const Move move);

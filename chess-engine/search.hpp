@@ -3,122 +3,81 @@
 #include "chess.hpp"
 #include "types.hpp"
 #include "evaluate.hpp"
-#include "score_move.hpp"
 #include "tt.hpp"
 #include "see.hpp"
+#include <memory.h>
+#include <algorithm>
+#include <math.h>
 #include <algorithm>
 #include <cmath>
 #include <math.h>
 using namespace Chess;
+using HistoryTable = std::array<std::array<int16_t, 64>, 13>;
 
-// Maximum size for move history stack
-constexpr int MAX_MOVE_HISTORY = 512;
+const int RFPMargin = 75;
+const int RFPDepth = 5;
+const int RFPImprovingBonus = 62;
+const int LMRBase = 75;
+const int LMRDivision = 225;
 
-// Maximum search depth
-constexpr int MAX_SEARCH_DEPTH = 64;
+const int NMPBase = 3;
+const int NMPDivision = 3;
+const int NMPMargin = 180;
 
-// Typedefs for history tables
-typedef int (*PieceToHistory)[64][12][64];
-template <typename T>
-struct CorrectionHistory
+extern TranspositionTable *table;
+struct SearchStack
 {
-   T *operator[](Piece p) { return table[p]; }
-   T *operator[](Piece p) const { return table[p]; }
-   T table[12][64] = {};
+   int16_t staticEval{};
+   uint8_t ply{};
+
+   Move move{NO_MOVE};
+   Move killers[2] = {NO_MOVE, NO_MOVE};
+
+   Piece movedPice{None};
+
+   int staticScore = 0;
+   HistoryTable *continuationHistory;
 };
 
-// PieceTo is a 64-entry array used in continuation history
-typedef int PieceTo[64];
-
-// Search stack structure for maintaining state during search
-struct Stack
+// A struct to hold the search data
+struct SearchThread
 {
-   Move *pv;
-   int ply;
-   Move currentMove;
-   Move excludedMove;
-   int staticEval;
-   int statScore;
-   int moveCount;
-   bool inCheck;
-   bool ttPv;
-   bool ttHit;
-   int cutoffCnt;
-   int reduction;
-   bool isTTMove;
-};
+   Board board;
+   HistoryTable searchHistory;
+   HistoryTable continuationHistory[13][64];
 
-// Node counting statistics
-struct SearchStats
-{
-   uint64_t nodes;       // Regular search nodes
-   uint64_t qnodes;      // Quiescence search nodes
-   uint64_t nullCutoffs; // Successful null move cutoffs
-   uint64_t ttCutoffs;   // Transposition table cutoffs
-   std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
+   uint64_t nodes = 0;
+   Move bestMove = NO_MOVE;
 
-   SearchStats() { clear(); }
-
-   void clear()
+   SearchThread() : board(DEFAULT_POS)
    {
+      clear();
+   }
+
+   // Applying fen on board
+   inline void applyFen(std::string fen)
+   {
+      board.applyFen(fen);
+   }
+   inline void clear()
+   {
+
       nodes = 0;
-      qnodes = 0;
-      nullCutoffs = 0;
-      ttCutoffs = 0;
-      startTime = std::chrono::high_resolution_clock::now();
-   }
-
-   uint64_t totalNodes() const { return nodes + qnodes; }
-
-   double elapsedSeconds() const
-   {
-      auto now = std::chrono::high_resolution_clock::now();
-      return std::chrono::duration<double>(now - startTime).count();
-   }
-
-   uint64_t nodesPerSecond() const
-   {
-      double seconds = elapsedSeconds();
-      return seconds > 0 ? static_cast<uint64_t>(totalNodes() / seconds) : 0;
-   }
-
-   void printStats() const
-   {
-      std::cout << "Nodes: " << totalNodes()
-                << " (" << nodes << " regular, " << qnodes << " qnodes)\n";
-      std::cout << "NPS: " << nodesPerSecond() << " nodes/sec\n";
-      std::cout << "TT cutoffs: " << ttCutoffs << " ("
-                << (100.0 * ttCutoffs / totalNodes()) << "%)\n";
-      std::cout << "Null cutoffs: " << nullCutoffs << " ("
-                << (100.0 * nullCutoffs / nodes) << "% of regular nodes)\n";
+      memset(searchHistory.data(), 0, sizeof(searchHistory));
+      memset(continuationHistory, 0, sizeof(continuationHistory));
    }
 };
-
-// Move history entry for keeping track of previous moves
-struct MoveHistoryEntry
-{
-   Move move;
-   U64 hashKey;
-
-   MoveHistoryEntry() : move(NO_MOVE), hashKey(0) {}
-   MoveHistoryEntry(Move m, U64 key) : move(m), hashKey(key) {}
-};
-
-// Add move to move history
-void addMoveToHistory(Move move, U64 hashKey);
-
-// Get last move from history
-Move getLastMove();
-
-// Clear move history
-void clearMoveHistory();
 
 // Global search stats object
-extern SearchStats searchStats;
+void initLateMoveTable();
+int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, bool cutnode);
+int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss);
 
-int negamax(Board &board, int depth, int alpha, int beta, TranspositionTable *table, int ply = 0);
+// Original non-templated function (kept for backward compatibility)
+void iterativeDeepening(SearchThread &st, const int &maxDepth);
 
-Move getBestMove(Board &board, int maxDepth, TranspositionTable *table);
+// New templated version with printInfo parameter
+template<bool printInfo>
+void iterativeDeepening(SearchThread &st, const int &maxDepth);
 
-Move getBestMoveIterativeWithScore(Board &board, int depth, TranspositionTable *table,
-                                   int alpha, int beta, int *score);
+int aspirationWindow(int prevEval, int depth, SearchThread& st, Move& bestmove);
