@@ -92,7 +92,7 @@ const int KING_EG_PST[64] = {
     -50, -30, -30, -30, -30, -30, -30, -50};
 
 // Function to determine game phase (0 = opening, 1 = endgame)
-inline float getGamePhase(const Board &board)
+float getGamePhase(const Board &board)
 {
     int remainingMaterial =
         popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
