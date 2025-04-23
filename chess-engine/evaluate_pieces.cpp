@@ -1,17 +1,15 @@
 #include "evaluate_pieces.hpp"
-#include "evaluate_mobility.hpp"
 #include <algorithm>
 
 using namespace Chess;
 
 // Helper functions
 Bitboard getKingRing(const Board& board, Color color) {
-   
     Square kingSq = board.KingSQ(color);
     Bitboard kingRing = 0;
     
     // Add all squares adjacent to the king
-    for (int dr = -1; dr <= 1; dr++) {
+   for (int dr = -1; dr <= 1; dr++) {
         for (int df = -1; df <= 1; df++) {
             if (dr == 0 && df == 0) continue; // Skip the king square itself
             
@@ -23,7 +21,7 @@ Bitboard getKingRing(const Board& board, Color color) {
             }
         }
     }
-
+    
     return kingRing;
 }
 
@@ -312,7 +310,7 @@ void evaluateBishops(EvalInfo& ei, Color color) {
                 }
             }
         } else {
-            for (int r = rank - 1; r >= 0; r++) {
+            for (int r = rank - 1; r >= 0; r--) {
                 if (pawns & (1ULL << (r * 8 + file))) {
                     bonus += 5;
                     break;
@@ -577,37 +575,236 @@ void evaluateKingSafety(EvalInfo& ei, Color color) {
 int evaluatePiecesMg(const Board& board) {
     EvalInfo ei(board);
     
-    // Piece attack counters
-    int whiteAttackers = 0, blackAttackers = 0;
+    // Clear previous scores
+    ei.mgScore = 0;
     
-    // Evaluate mobility for both sides
-    evaluateMobility(ei, White);
-    evaluateMobility(ei, Black);
+    // Evaluate each piece type for both colors
+    for (Color color : {White, Black}) {
+        // Get all minor and major pieces (knights, bishops, rooks, queens)
+        Bitboard knights = board.pieces(KNIGHT, color);
+        Bitboard bishops = board.pieces(BISHOP, color);
+        Bitboard rooks = board.pieces(ROOK, color);
+        Bitboard queens = board.pieces(QUEEN, color);
+
+        // Knights evaluation
+        while (knights) {
+            Square sq = static_cast<Square>(pop_lsb(knights));
+            int score = 0;
+            
+            // Outpost value: [0,31,-7,30,56][outpost_total]
+            if ((1ULL << sq) & ei.outpostSquares[color]) {
+                if (!canPawnAttackSquare(board, sq, ~color)) {
+                    score += 31; // Basic outpost
+                    if (isPawnProtected(board, sq, color)) {
+                        score += 25; // Protected outpost (31 + 25 = 56 total)
+                    }
+                } else {
+                    score -= 7; // Can be attacked by enemy pawn
+                }
+            }
+            
+            // Minor behind pawn: 18 points
+            int file = square_file(sq);
+            int rank = square_rank(sq);
+            Bitboard pawns = board.pieces(PAWN, color);
+            if (color == White) {
+                for (int r = rank + 1; r < 8; r++) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 18;
+                        break;
+                    }
+                }
+            } else {
+                for (int r = rank - 1; r >= 0; r--) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 18;
+                        break;
+                    }
+                }
+            }
+            
+            // King protector: -8 for knights
+            if ((KnightAttacks(sq) & ei.kingRings[color]) || 
+                ((1ULL << sq) & ei.kingRings[color])) {
+                score -= 8;
+            }
+            
+            // Apply score
+            ei.mgScore += score * (color == White ? 1 : -1);
+        }
+        
+        // Bishops evaluation
+        while (bishops) {
+            Square sq = static_cast<Square>(pop_lsb(bishops));
+            int score = 0;
+            
+            // Outpost value: same as knights
+            if ((1ULL << sq) & ei.outpostSquares[color]) {
+                if (!canPawnAttackSquare(board, sq, ~color)) {
+                    score += 31; // Basic outpost
+                    if (isPawnProtected(board, sq, color)) {
+                        score += 25; // Protected outpost (31 + 25 = 56 total)
+                    }
+                } else {
+                    score -= 7; // Can be attacked by enemy pawn
+                }
+            }
+            
+            // Minor behind pawn: 18 points
+            int file = square_file(sq);
+            int rank = square_rank(sq);
+            Bitboard pawns = board.pieces(PAWN, color);
+            if (color == White) {
+                for (int r = rank + 1; r < 8; r++) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 18;
+                        break;
+                    }
+                }
+            } else {
+                for (int r = rank - 1; r >= 0; r--) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 18;
+                        break;
+                    }
+                }
+            }
+            
+            // Bishop pawns: -3 per same-colored pawn
+            bool isDarkSquare = ((square_rank(sq) + square_file(sq)) % 2) == 1;
+            int sameColorPawns = 0;
+            Bitboard pawnsCopy = pawns;
+            while (pawnsCopy) {
+                Square pawnSq = static_cast<Square>(pop_lsb(pawnsCopy));
+                bool isPawnOnDark = ((square_rank(pawnSq) + square_file(pawnSq)) % 2) == 1;
+                if (isPawnOnDark == isDarkSquare) {
+                    sameColorPawns++;
+                }
+            }
+            score -= 3 * sameColorPawns;
+            
+            // Bishop xray pawns: -4 per vulnerable pawn
+            // Using empty board for x-ray attacks
+            Bitboard xrayAttacks = BishopAttacks(sq, 0);
+            // Get normal attacks with pieces
+            Bitboard normalAttacks = BishopAttacks(sq, board.All());
+            // X-ray squares are those the bishop could attack if pieces weren't in the way
+            Bitboard xraySquares = xrayAttacks & ~normalAttacks;
+            // Count enemy pawns on x-ray squares
+            score -= 4 * popcount(xraySquares & board.pieces(PAWN, ~color));
+            
+            // Bishop on king ring: +24
+            if (BishopAttacks(sq, board.All()) & ei.kingRings[~color]) {
+                score += 24;
+            }
+            
+            // Long diagonal bishop: +45
+            Bitboard mainDiagonal1 = 0x8040201008040201ULL;  // a1-h8
+            Bitboard mainDiagonal2 = 0x0102040810204080ULL;  // a8-h1
+            if ((1ULL << sq) & (mainDiagonal1 | mainDiagonal2)) {
+                score += 45;
+            }
+            
+            // King protector: -6 for bishops
+            if ((BishopAttacks(sq, board.All()) & ei.kingRings[color]) || 
+                ((1ULL << sq) & ei.kingRings[color])) {
+                score -= 6;
+            }
+            
+            // Apply score
+            ei.mgScore += score * (color == White ? 1 : -1);
+        }
+        
+        // Rooks evaluation
+        while (rooks) {
+            Square sq = static_cast<Square>(pop_lsb(rooks));
+            int score = 0;
+            
+            // Rook on queen file (d-file): +6
+            if (square_file(sq) == 3) {
+                score += 6;
+            }
+            
+            // Rook on king ring: +16
+            if (RookAttacks(sq, board.All()) & ei.kingRings[~color]) {
+                score += 16;
+            }
+            
+            // Rook on file: [0,19,48]
+            int file = square_file(sq);
+            Bitboard fileSquares = MASK_FILE[file];
+            Bitboard pawnsAll = board.pieces(PAWN, White) | board.pieces(PAWN, Black);
+            
+            if ((fileSquares & pawnsAll) == 0) {
+                score += 48; // Open file
+            } else if ((fileSquares & board.pieces(PAWN, color)) == 0) {
+                score += 19; // Semi-open file
+            }
+            
+            // Trapped rook: -55 or -110 (doubled if no castling)
+            bool isTrapped = false;
+            if (color == White) {
+                if (square_rank(sq) == 0 && (file == 0 || file == 7)) {
+                    Square adjacentSquare = (file == 0) ? SQ_B1 : SQ_G1;
+                    if (board.pieceAtB(adjacentSquare) == WhiteKing) {
+                        isTrapped = true;
+                    }
+                }
+            } else {
+                if (square_rank(sq) == 7 && (file == 0 || file == 7)) {
+                    Square adjacentSquare = (file == 0) ? SQ_B8 : SQ_G8;
+                    if (board.pieceAtB(adjacentSquare) == BlackKing) {
+                        isTrapped = true;
+                    }
+                }
+            }
+            
+            if (isTrapped) {
+                // Check castling rights using the bitflags system
+                uint8_t relevantRights = 0;
+                if (color == White) {
+                    // wk = 1, wq = 2
+                    relevantRights = (file == 7) ? 1 : 2; // kingside or queenside
+                } else {
+                    // bk = 4, bq = 8
+                    relevantRights = (file == 7) ? 4 : 8; // kingside or queenside
+                }
+                bool hasCastling = (board.castlingRights & relevantRights) != 0;
+                score -= 55 * (hasCastling ? 1 : 2);
+            }
+            
+            // Apply score
+            ei.mgScore += score * (color == White ? 1 : -1);
+        }
+        
+        // Queens evaluation
+        while (queens) {
+            Square sq = static_cast<Square>(pop_lsb(queens));
+            int score = 0;
+            
+            // Weak queen: -56 (queen under attack by lesser pieces)
+            Board mutableBoard = board;
+            Bitboard attackers = mutableBoard.attackersForSide(~color, sq, mutableBoard.All());
+            Bitboard minorAttackers = attackers & (mutableBoard.pieces(KNIGHT, ~color) | mutableBoard.pieces(BISHOP, ~color));
+            
+            if (minorAttackers) {
+                score -= 56;
+            }
+            
+            // Queen infiltration: -2 per square into enemy territory
+            int rank = square_rank(sq);
+            if ((color == White && rank >= 5) || (color == Black && rank <= 2)) {
+                score -= 2 * (color == White ? rank - 4 : 3 - rank);
+            }
+            
+            // Apply score
+            ei.mgScore += score * (color == White ? 1 : -1);
+        }
+    }
     
-    // Evaluate king safety
+    // Evaluate king safety - already done in the current implementation
     evaluateKingSafety(ei, White);
     evaluateKingSafety(ei, Black);
-    
-    // Evaluate pieces attacking king ring
-    evaluatePiecesAttackingKingRing(ei, White, whiteAttackers);
-    evaluatePiecesAttackingKingRing(ei, Black, blackAttackers);
-    
-    // Evaluate outposts
-    evaluateOutposts(ei, White);
-    evaluateOutposts(ei, Black);
-    
-    // Evaluate piece-specific features
-    evaluateRooks(ei, White);
-    evaluateRooks(ei, Black);
-    
-    evaluateBishops(ei, White);
-    evaluateBishops(ei, Black);
-    
-    evaluateKnights(ei, White);
-    evaluateKnights(ei, Black);
-    
-    evaluateQueens(ei, White);
-    evaluateQueens(ei, Black);
     
     return ei.mgScore;
 }
@@ -615,52 +812,240 @@ int evaluatePiecesMg(const Board& board) {
 int evaluatePiecesEg(const Board& board) {
     EvalInfo ei(board);
     
-    // Piece attack counters
-    int whiteAttackers = 0, blackAttackers = 0;
+    // Clear previous scores
+    ei.egScore = 0;
     
-    // Evaluate mobility for both sides
-    evaluateMobility(ei, White);
-    evaluateMobility(ei, Black);
+    // Evaluate each piece type for both colors
+    for (Color color : {White, Black}) {
+        // Get all minor and major pieces (knights, bishops, rooks, queens)
+        Bitboard knights = board.pieces(KNIGHT, color);
+        Bitboard bishops = board.pieces(BISHOP, color);
+        Bitboard rooks = board.pieces(ROOK, color);
+        Bitboard queens = board.pieces(QUEEN, color);
+
+        // Knights evaluation
+        while (knights) {
+            Square sq = static_cast<Square>(pop_lsb(knights));
+            int score = 0;
+            
+            // Outpost value: [0,22,36,23,36][outpost_total] - FIXED to match Stockfish guide
+            if ((1ULL << sq) & ei.outpostSquares[color]) {
+                if (!canPawnAttackSquare(board, sq, ~color)) {
+                    score += 22; // Basic outpost
+                    if (isPawnProtected(board, sq, color)) {
+                        score += 14; // Protected outpost (22 + 14 = 36 total)
+                    }
+                } else if (isPawnProtected(board, sq, color)) {
+                    score += 23; // Can be attacked but protected
+                }
+            }
+            
+            // Minor behind pawn: 3 points in endgame - FIXED to match Stockfish guide
+            int file = square_file(sq);
+            int rank = square_rank(sq);
+            Bitboard pawns = board.pieces(PAWN, color);
+            if (color == White) {
+                for (int r = rank + 1; r < 8; r++) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 3;
+                        break;
+                    }
+                }
+            } else {
+                for (int r = rank - 1; r >= 0; r--) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 3;
+                        break;
+                    }
+                }
+            }
+            
+            // King protector: -9 in endgame - FIXED to match Stockfish guide
+            if ((KnightAttacks(sq) & ei.kingRings[color]) || 
+                ((1ULL << sq) & ei.kingRings[color])) {
+                score -= 9;
+            }
+            
+            // Apply score
+            ei.egScore += score * (color == White ? 1 : -1);
+        }
+        
+        // Bishops evaluation
+        while (bishops) {
+            Square sq = static_cast<Square>(pop_lsb(bishops));
+            int score = 0;
+            
+            // Outpost value: same structure as knights
+            if ((1ULL << sq) & ei.outpostSquares[color]) {
+                if (!canPawnAttackSquare(board, sq, ~color)) {
+                    score += 22; // Basic outpost
+                    if (isPawnProtected(board, sq, color)) {
+                        score += 14; // Protected outpost
+                    }
+                } else if (isPawnProtected(board, sq, color)) {
+                    score += 23; // Can be attacked but protected
+                }
+            }
+            
+            // Minor behind pawn: 3 points in endgame - FIXED to match Stockfish guide
+            int file = square_file(sq);
+            int rank = square_rank(sq);
+            Bitboard pawns = board.pieces(PAWN, color);
+            if (color == White) {
+                for (int r = rank + 1; r < 8; r++) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 3;
+                        break;
+                    }
+                }
+            } else {
+                for (int r = rank - 1; r >= 0; r--) {
+                    if (pawns & (1ULL << (r * 8 + file))) {
+                        score += 3;
+                        break;
+                    }
+                }
+            }
+            
+            // Bishop pawns: -7 per same-colored pawn in endgame - FIXED to match Stockfish guide
+            bool isDarkSquare = ((square_rank(sq) + square_file(sq)) % 2) == 1;
+            int sameColorPawns = 0;
+            Bitboard pawnsCopy = pawns;
+            while (pawnsCopy) {
+                Square pawnSq = static_cast<Square>(pop_lsb(pawnsCopy));
+                bool isPawnOnDark = ((square_rank(pawnSq) + square_file(pawnSq)) % 2) == 1;
+                if (isPawnOnDark == isDarkSquare) {
+                    sameColorPawns++;
+                }
+            }
+            score -= 7 * sameColorPawns; // Correct penalty in endgame
+            
+            // Bishop xray pawns: -5 per vulnerable pawn in endgame - FIXED to match Stockfish guide
+            Bitboard xrayAttacks = BishopAttacks(sq, 0);
+            Bitboard normalAttacks = BishopAttacks(sq, board.All());
+            Bitboard xraySquares = xrayAttacks & ~normalAttacks;
+            score -= 5 * popcount(xraySquares & board.pieces(PAWN, ~color));
+            
+            // King protector: -9 in endgame (same for all pieces) - FIXED to match Stockfish guide
+            if ((BishopAttacks(sq, board.All()) & ei.kingRings[color]) || 
+                ((1ULL << sq) & ei.kingRings[color])) {
+                score -= 9;
+            }
+            
+            // Apply score
+            ei.egScore += score * (color == White ? 1 : -1);
+        }
+        
+        // Rooks evaluation
+        while (rooks) {
+            Square sq = static_cast<Square>(pop_lsb(rooks));
+            int score = 0;
+            
+            // Rook on queen file: +11 in endgame - FIXED to match Stockfish guide
+            if (square_file(sq) == 3) {
+                score += 11;
+            }
+            
+            // Rook on file: [0,7,29] in endgame - FIXED to match Stockfish guide
+            int file = square_file(sq);
+            Bitboard fileSquares = MASK_FILE[file];
+            Bitboard pawnsAll = board.pieces(PAWN, White) | board.pieces(PAWN, Black);
+            
+            if ((fileSquares & pawnsAll) == 0) {
+                score += 29; // Open file
+            } else if ((fileSquares & board.pieces(PAWN, color)) == 0) {
+                score += 7; // Semi-open file
+            }
+            
+            // Trapped rook: -13 or -26 (doubled if no castling) in endgame - FIXED to match Stockfish guide
+            bool isTrapped = false;
+            if (color == White) {
+                if (square_rank(sq) == 0 && (file == 0 || file == 7)) {
+                    Square adjacentSquare = (file == 0) ? SQ_B1 : SQ_G1;
+                    if (board.pieceAtB(adjacentSquare) == WhiteKing) {
+                        isTrapped = true;
+                    }
+                }
+            } else {
+                if (square_rank(sq) == 7 && (file == 0 || file == 7)) {
+                    Square adjacentSquare = (file == 0) ? SQ_B8 : SQ_G8;
+                    if (board.pieceAtB(adjacentSquare) == BlackKing) {
+                        isTrapped = true;
+                    }
+                }
+            }
+            
+            if (isTrapped) {
+                // Check castling rights using the bitflags system
+                uint8_t relevantRights = 0;
+                if (color == White) {
+                    // wk = 1, wq = 2
+                    relevantRights = (file == 7) ? 1 : 2; // kingside or queenside
+                } else {
+                    // bk = 4, bq = 8
+                    relevantRights = (file == 7) ? 4 : 8; // kingside or queenside
+                }
+                bool hasCastling = (board.castlingRights & relevantRights) != 0;
+                score -= 13 * (hasCastling ? 1 : 2); // FIXED to match Stockfish guide
+            }
+            
+            // Apply score
+            ei.egScore += score * (color == White ? 1 : -1);
+        }
+        
+        // Queens evaluation
+        while (queens) {
+            Square sq = static_cast<Square>(pop_lsb(queens));
+            int score = 0;
+            
+            // Weak queen: -15 in endgame - FIXED to match Stockfish guide
+            Board mutableBoard = board;
+            Bitboard attackers = mutableBoard.attackersForSide(~color, sq, mutableBoard.All());
+            Bitboard minorAttackers = attackers & (mutableBoard.pieces(KNIGHT, ~color) | mutableBoard.pieces(BISHOP, ~color));
+            
+            if (minorAttackers) {
+                score -= 15;
+            }
+            
+            // Queen infiltration: +14 in endgame (positive bonus) - FIXED to match Stockfish guide
+            int rank = square_rank(sq);
+            if ((color == White && rank >= 5) || (color == Black && rank <= 2)) {
+                score += 14 * (color == White ? rank - 4 : 3 - rank);
+            }
+            
+            // King protector: -9 in endgame (same for all pieces) - FIXED to match Stockfish guide
+            if ((QueenAttacks(sq, board.All()) & ei.kingRings[color]) || 
+                ((1ULL << sq) & ei.kingRings[color])) {
+                score -= 9;
+            }
+            
+            // Apply score
+            ei.egScore += score * (color == White ? 1 : -1);
+        }
+    }
     
-    // Evaluate king safety (less important in endgame)
+    // Evaluate king safety - less important in endgame
     evaluateKingSafety(ei, White);
     evaluateKingSafety(ei, Black);
-    
-    // Evaluate pieces attacking king ring
-    evaluatePiecesAttackingKingRing(ei, White, whiteAttackers);
-    evaluatePiecesAttackingKingRing(ei, Black, blackAttackers);
-    
-    // Evaluate outposts
-    evaluateOutposts(ei, White);
-    evaluateOutposts(ei, Black);
-    
-    // Evaluate piece-specific features
-    evaluateRooks(ei, White);
-    evaluateRooks(ei, Black);
-    
-    evaluateBishops(ei, White);
-    evaluateBishops(ei, Black);
-    
-    evaluateKnights(ei, White);
-    evaluateKnights(ei, Black);
-    
-    evaluateQueens(ei, White);
-    evaluateQueens(ei, Black);
     
     return ei.egScore;
 }
 
 // Helper function to determine if position is in endgame
 bool isEndgame(const Board& board) {
-    // Simple endgame detection - count material without pawns
-    int materialCount = 0;
+    constexpr int KnightEg = 854;
+    constexpr int BishopEg = 915;
+    constexpr int RookEg = 1380;
+    constexpr int QueenEg = 2682;
+    constexpr int EndgameLimit = 3915;
     
-    materialCount += popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * 3;
-    materialCount += popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * 3;
-    materialCount += popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * 5;
-    materialCount += popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * 9;
+    int materialSum =
+        popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KnightEg +
+        popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BishopEg +
+        popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * RookEg +
+        popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QueenEg;
     
-    return materialCount <= 12; // Arbitrary threshold
+    return materialSum <= EndgameLimit;
 }
 
 // Main evaluation function
@@ -668,11 +1053,12 @@ int evaluatePieces(const Board& board) {
     int mgScore = evaluatePiecesMg(board);
     int egScore = evaluatePiecesEg(board);
     
-    // For simplicity, we'll use a linear interpolation based on total material
-    bool inEndgame = isEndgame(board);
-    int finalScore = inEndgame ? egScore : mgScore;
-    finalScore = (((mgScore * inEndgame + ((egScore * (128 - inEndgame)) << 0)) / 128) << 0);
-
+    // Get game phase for smooth interpolation (0.0 = middlegame, 1.0 = endgame)
+    float phase = getGamePhase(board);
+    
+    // Smooth interpolation between middlegame and endgame scores
+    int finalScore = int((1.0f - phase) * mgScore + phase * egScore);
+    
     // Return the score from the perspective of the side to move
-    return finalScore;
+    return board.sideToMove == White ? finalScore : -finalScore;
 }

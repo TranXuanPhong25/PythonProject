@@ -1,5 +1,7 @@
 #include "evaluate.hpp"
 #include "evaluate_features.hpp"
+#include "evaluate_pieces.hpp"
+#include "evaluate_threatEG.hpp"
 #include "chess.hpp"
 #include "evaluate_pieces.hpp"
 #include "evaluate_attacks.hpp"  // Added include for attack evaluation
@@ -29,6 +31,20 @@ float getGamePhase(const Board &board)
 
     float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
     return phase;
+}
+
+// Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
+float getGamePhase(const Board &board)
+{
+   int remainingMaterial =
+       popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
+       popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KNIGHT_VALUE +
+       popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BISHOP_VALUE +
+       popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * ROOK_VALUE +
+       popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QUEEN_VALUE;
+
+   float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
+   return phase;
 }
 
 int evaluate(const Board &board)
@@ -112,6 +128,25 @@ int evaluate(const Board &board)
     if (popcount(board.pieces(BISHOP, Black)) >= 2)
         score -= 30;
 
+   // Rook pair bonus
+   if (popcount(board.pieces(ROOK, White)) >= 2)
+      score += 20;
+   if (popcount(board.pieces(ROOK, Black)) >= 2)
+      score -= 20;
+   
+   score += evaluatePieces(board);
+
+   // Evaluate PawnStructure
+   score += evaluatePawnStructure(board);
+   
+   // Evaluate center control
+   score += evaluateCenterControl(board);
+   
+   // Apply threat evaluation in endgame with proper scaling based on game phase
+   if (endgameWeight > 0.0f) {
+      int threatScore = threats_endgame(board);
+      score += threatScore * endgameWeight;
+   }
     // Rook pair bonus
     if (popcount(board.pieces(ROOK, White)) >= 2)
         score += 20;

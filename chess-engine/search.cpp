@@ -110,7 +110,9 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 
    if (standPat > alpha)
       alpha = standPat;
-   /* Probe Tranpsosition Table */
+<<<<<<<<< Temporary merge branch 1
+
+   // Time the TT lookup
    bool ttHit = false;
    bool isPVNode = (beta - alpha) > 1;
    bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));   TTEntry &ttEntry = table->probe_entry(board.hashKey, ttHit);
@@ -164,6 +166,26 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
          continue;
       }
 
+<<<<<<<<< Temporary merge branch 1
+      // Time move making
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.makeMove(move);
+         table->prefetch_tt(board.hashKey);
+         profiler.movesMade++;
+      }
+
+      moveCount++;
+      int score = -quiescence(board, -beta, -alpha, table, ply + 1);
+
+      // Time move unmaking
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.unmakeMove(move);
+      }
+
+      if (score > bestValue)
+=========
       // Futility pruning for each move
       // If the piece we're capturing plus our current standing pat won't exceed alpha, skip
       if (moveCount > 0 && !board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
@@ -178,29 +200,17 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 
       ss->continuationHistory = &st.continuationHistory[ss->movedPice][to(move)];
 
-
-      // Time move making
-      {
-         PROFILE_SCOPE(moveMaking);
-         board.makeMove(move);
-         table->prefetch_tt(board.hashKey);
+      board.makeMove(move);
+      table->prefetch_tt(board.hashKey);
 
       (ss + 1)->ply = ss->ply + 1;
-         profiler.movesMade++;
-      }
-
       moveCount++;
       ss->move = move;
 
       score = -quiescence(-beta, -alpha, st, ss + 1);
-
-      // Time move unmaking
-      {
-         PROFILE_SCOPE(moveMaking);
-         board.unmakeMove(move);
-      }
-
+      board.unmakeMove(move);
       if (score > bestScore)
+>>>>>>>>> Temporary merge branch 2
       {
          bestMove = move;
          bestScore = score;
@@ -238,11 +248,65 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
    // Step 2: Helper variables
    Board &board = st.board;
 
-   bool isRoot = (ss->ply == 0);
-   bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
-   bool isPVNode = (beta - alpha) > 1;
+<<<<<<<<< Temporary merge branch 1
+   if (board.isRepetition())
+   {
+      return 0;
+   }
+   if (ply >= MAX_PLY - 1)
+   {
+      PROFILE_SCOPE(evaluation);
+      profiler.evaluations++;
+      return evaluate(board);
+   }
 
-   bool improving = false;
+   // TT lookup with timing
+   U64 posKey = board.hashKey;
+   bool ttHit;
+   TTEntry &entry = table->probe_entry(posKey, ttHit);
+   bool is_pvnode = (beta - alpha) > 1;
+   int tt_score;
+   Move ttMove = NO_MOVE;
+
+   {
+      PROFILE_SCOPE(ttLookup);
+      table->prefetch_tt(posKey);
+      profiler.ttLookups++;
+      tt_score = ttHit ? score_from_tt(entry.get_score(), ply) : 0;
+      if (ttHit)
+         profiler.ttHits++;
+   }
+
+   // TT cutoff logic
+   if (!is_pvnode && ttHit && entry.depth >= depth)
+   {
+      searchStats.ttCutoffs++;
+
+      if (entry.flag == HFEXACT)
+         return entry.score;
+      if (entry.flag == HFALPHA && entry.score <= alpha)
+         return alpha;
+      if (entry.flag == HFBETA && entry.score >= beta)
+         return beta;
+
+      searchStats.ttCutoffs--;
+   }
+
+   if (ttHit)
+   {
+      ttMove = entry.move;
+   }
+
+   // Get the lastMove from our custom move history
+   Move lastMove = getLastMove();
+
+   // Checkmate detection and pruning logic
+=========
+   bool isRoot = (ss->ply == 0);
+>>>>>>>>> Temporary merge branch 2
+   bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));
+   bool isRoot = (ply == 0);
+   int staticEval;
    int eval = 0;
 
    // Step 3:
@@ -462,85 +526,25 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
       bool refutationMove = (ss->killers[0] == move || ss->killers[1] == move);
 
       // Get history score for this move to use in pruning decisions
-      int hist = 0, counterHist = 0, followUpHist = 0;
-      int history = getHistoryScores(hist, counterHist, followUpHist, st, ss, move);
-      ss->staticScore = 2 * hist + counterHist + followUpHist - 4000;
+      int side = board.sideToMove == White ? 0 : 1;
+      int history_score = historyTable[side][from(move)][to(move)];
 
       if (isQuiet && skipQuietMove)
       {
          continue;
       }
 
-      /* Step 10: Quiet move pruning
-       * We can prune quiet moves that are not captures or promotions
-       * LMP + Continuation History pruning + Futility Pruning + SEE pruning
-       */
-      if (!isRoot && bestScore > -ISMATE && board.nonPawnMat(board.sideToMove))
-      {
-
-         // Get precalculated lmr depth from lmrTable
-         int lmrDepth = lmrTable[std::min(depth, MAXDEPTH)][std::min(moveCount, MAXDEPTH)];
-
-         // Pruning for quiets
-         if (isQuiet && !givesCheck)
-         {
-            /* Late Move Pruning/Movecount pruning
-             * A further variation of Extended Futility Pruning
-             * combining the ideas of Fruit's History Leaf Pruning and LMR implemented in Stockfish.
-             * If we have searched many moves, we can skip the rest.
-             * https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning
-             */
-            if (!inCheck && !isPVNode && depth <= TunableParams::LMP_DEPTH_THRESHOLD && quietList.size >= lmpTable[improving][depth])
-            {
-               skipQuietMove = true;
-               continue;
-            }
-
-            // Continuation History pruning
-            if (lmrDepth < 4 && history < -TunableParams::HISTORY_PRUNING_THRESHOLD * depth && (ss - 1)->staticScore > 0 && counterHist < 0)
-            {
-               skipQuietMove = true;
-               continue;
-            }
-
-            /* Futility Pruning
-             * If the eval is well above beta by a margin, then we assume the eval
-             * will hold above beta.
-             * https://www.chessprogramming.org/Futility_Pruning
-             */
-            if (lmrDepth <= TunableParams::FUTILITY_DEPTH && !inCheck && 
-                ss->staticEval + TunableParams::FUTILITY_MARGIN + TunableParams::FUTILITY_IMPROVING * depth <= alpha)
-            {
-               skipQuietMove = true;
-            }
-
-            // SEE pruning for quiets
-            if (depth <= TunableParams::FUTILITY_DEPTH && !see(board, move, TunableParams::SEE_QUIET_MARGIN_BASE * depth))
-            {
-               continue;
-            }
-         }
-         else
-            // SEE pruning for noisy
-            if (!see(board, move, TunableParams::SEE_NOISY_MARGIN_BASE * depth * depth))
-            {
-               continue;
-            }
-      }
-
-      // TODO: try to group ss update
-      ss->continuationHistory = &st.continuationHistory[ss->movedPice][to(move)];
-
-      // Step 11: Make the move
       board.makeMove(move);
       table->prefetch_tt(board.hashKey);
 
-      ss->move = move;
-      (ss + 1)->ply = ss->ply + 1;
+      // Add the move to our custom move history
+      addMoveToHistory(move, board.hashKey);
 
-      moveCount++;
+      movesSearched++;
 
-      if (isRoot && depth == 1 && moveCount == 1)
+      int score;
+      // Full Window Search for first move
+      if (i == 0)
       {
          // Assume the first move is the best move
          st.bestMove = move;
@@ -606,7 +610,10 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
          score = -negamax(-beta, -alpha, depth - 1, st, ss + 1, false);
       }
 
-      // Step 13: Unmake the move
+      // Remove the last move from our history to backtrack
+      if (moveHistoryCount > 0)
+          moveHistoryCount--;
+          
       board.unmakeMove(move);
 
       // Step 14: Alpha-beta pruning
@@ -624,13 +631,14 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
             {
                if (isQuiet)
                {
-                  // Update killers
-                  ss->killers[1] = ss->killers[0];
-                  ss->killers[0] = move;
+                  addKillerMove(move, ply);
+                  updateHistory(board, move, depth, true);
 
                   // Update histories
                   updateHistories(st, ss, bestMove, quietList, depth);
                }
+
+               nodeFlag = HFBETA;
                break;
             }
             // clang-format on

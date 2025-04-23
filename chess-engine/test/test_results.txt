@@ -48,7 +48,7 @@ Depth 13, Score: 752, Nodes: 50086, NPS: 1651060
 Depth 14, Score: 762, Nodes: 61648, NPS: 1606948
 Depth 15, Score: 772, Nodes: 78561, NPS: 1586154
 
-Time taken : 49.5304 ms
+Time taken : 35.5342 ms
 bestmove a6h6
 -----------------------------------
 Result: PASS
@@ -101,7 +101,8 @@ Depth 15, Score: -796, Nodes: 63402, NPS: 1609867
 Time taken : 39.3839 ms
 bestmove a2a3
 -----------------------------------
-Result: PASS
+Result: FAIL
+Found: b2b3, Expected: a2a3
 -----------------------------------
 
 Test #5 of 21
@@ -153,7 +154,7 @@ Time taken : 88.0223 ms
 bestmove e8c6
 -----------------------------------
 Result: FAIL
-Found: e8c6, Expected: c5d6
+Found: e1e3, Expected: c5d6
 -----------------------------------
 
 Test #7 of 21
@@ -356,7 +357,8 @@ Depth 15, Score: -261, Nodes: 88090, NPS: 1327624
 Time taken : 66.3551 ms
 bestmove d8d4
 -----------------------------------
-Result: PASS
+Result: FAIL
+Found: c3e5, Expected: d8d4
 -----------------------------------
 
 Test #15 of 21
@@ -458,7 +460,8 @@ Depth 15, Score: -275, Nodes: 181094, NPS: 916149
 Time taken : 197.67 ms
 bestmove g7g5
 -----------------------------------
-Result: PASS
+Result: FAIL
+Found: g7g6, Expected: g7g5
 -----------------------------------
 
 Test #19 of 21
@@ -510,7 +513,7 @@ Time taken : 374.055 ms
 bestmove a1b1
 -----------------------------------
 Result: FAIL
-Found: a1b1, Expected: f3g2
+Found: a3a4, Expected: f3g2
 -----------------------------------
 
 Test #21 of 21
@@ -541,5 +544,5 @@ Found: b2a1, Expected: f3g2
 
 
 ==== TEST SUMMARY ====
-Tests passed: 10/21 (47%)
-Total time: 6834 ms
+Tests passed: 11/21 (52%)
+Total time: 19392 ms

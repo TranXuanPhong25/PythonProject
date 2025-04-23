@@ -19,12 +19,10 @@ static inline int getContinuationHistoryScores(SearchThread &st, SearchStack *ss
     return score;
 }
 
-// Move scoring
-void scoreMoves(SearchThread &st, Movelist &list, SearchStack *ss, Move tt_move)
+// Clear history scores between games
+void clearHistory()
 {
-
-    // Loop through moves in movelist.
-    for (int i = 0; i < list.size; i++)
+    for (int i = 0; i < 2; i++)
     {
         Piece victim = st.board.pieceAtB(to(list[i].move));
         Piece attacker = st.board.pieceAtB(from(list[i].move));
@@ -36,28 +34,59 @@ void scoreMoves(SearchThread &st, Movelist &list, SearchStack *ss, Move tt_move)
         }
         else if (victim != None)
         {
-            // If it's a capture move, we score using MVVLVA (Most valuable
-            // victim, Least Valuable Attacker) and if see move that doesn't
-            // lose material, we add additional bonus
-
-            list[i].value = mvv_lva[attacker][victim] +
-                            (GoodCaptureScore * see(st.board, list[i].move, -107));
+            score += mvv_lva[attacker][victim];
+            score += (GoodCaptureScore * see(board, move, -107));
         }
-        else if (list[i].move == ss->killers[0])
+        // Check for killer moves
+        else if (ply < MAX_PLY)
         {
-            // Score for killer 1
-            list[i].value = Killer1Score;
+            if (move == killerMoves[ply][0])
+            {
+                score = 9000;
+            }
+            else if (move == killerMoves[ply][1])
+            {
+                score = 8900;
+            }
+            // Check for countermove (slightly less value than killer moves)
+            else if (move == counterMove)
+            {
+                score = 8800;
+            }
+            // History and continuation history for quiet moves
+            else
+            {
+                int side = board.sideToMove == White ? 0 : 1;
+                int history_score = historyTable[side][from(move)][to(move)];
+                
+                // Add continuation history score if we have a previous move
+                int continuation_score = 0;
+                if (lastMove != NO_MOVE) {
+                    Piece lastPiece = board.pieceAtB(to(lastMove));
+                    int lastTo = to(lastMove);
+                    
+                    if (lastPiece != None && attacker != None) {
+                        continuation_score = continuationHistory[lastPiece][lastTo][attacker][to(move)];
+                    }
+                }
+                
+                // Combine history and continuation history scores
+                if (lastMove != NO_MOVE) {
+                    // Weight more on regular history as it's more reliable
+                    score = (history_score * 2 + continuation_score) / 3;
+                } else {
+                    score = history_score;
+                }
+            }
         }
-        else if (list[i].move == ss->killers[1])
-        {
-            // Score for killer 2
-            list[i].value = Killer2Score;
-        }
+        // History heuristic (quiets that have been good in the past)
         else
         {
-            // Otherwise, history score.
-            list[i].value = st.searchHistory[attacker][to(list[i].move)] + getContinuationHistoryScores(st, ss, list[i].move);
+            int side = board.sideToMove == White ? 0 : 1;
+            score = historyTable[side][from(move)][to(move)];
         }
+        
+        moves[i].value = score;
     }
 }
 
@@ -66,7 +95,8 @@ void scoreMoves(SearchThread &st, Movelist &list, SearchStack *ss, Move tt_move)
 void scoreMovesForQS(Board &board, Movelist &list, Move tt_move)
 {
 
-    // Score each move in the quiescence search list
+    // Loop through moves in movelist.
+>>>>>>>>> Temporary merge branch 2
     for (int i = 0; i < list.size; i++)
     {
         Move move = list[i].move;
@@ -138,75 +168,18 @@ void pickNextMove(const int& moveNum, Movelist &list)
             bestnum = index;
         }
     }
-
+<<<<<<<<< Temporary merge branch 1
     
     // Swap the highest scoring move to the current position
+=========
+
+>>>>>>>>> Temporary merge branch 2
     temp = list[moveNum];
     list[moveNum] = list[bestnum];
     list[bestnum] = temp;
 }
 
-void updateH(int16_t &historyScore, const int bonus)
-{
-    historyScore += bonus - historyScore * std::abs(bonus) / MAXHISTORY;
-}
-
-void updateCH(int16_t &historyScore, const int bonus)
-{
-
-    historyScore += bonus - historyScore * std::abs(bonus) / MAXCOUNTERHISTORY;
-}
-
-void updateContinuationHistories(SearchStack *ss, Piece piece, Move move, int bonus)
-{
-
-    if ((ss - 1)->move)
-    {
-        updateCH((*(ss - 1)->continuationHistory)[ss->movedPice][to(move)], bonus);
-    }
-
-    if ((ss - 2)->move)
-    {
-        updateCH((*(ss - 2)->continuationHistory)[ss->movedPice][to(move)], bonus);
-    }
-}
-
-void updateHistories(SearchThread &st, SearchStack *ss, Move bestmove, Movelist &quietList, int depth)
-{
-    // Update best move score
-    int bonus = historyBonus(depth);
-
-    if (depth > 2)
-    {
-        updateH(st.searchHistory[st.board.pieceAtB(from(bestmove))][to(bestmove)], bonus);
-        updateContinuationHistories(ss, st.board.pieceAtB(from(bestmove)), bestmove, bonus);
-    }
-
-    for (int i = 0; i < quietList.size; i++)
-    {
-        Move move = quietList[i].move;
-
-        if (move == bestmove)
-            continue; // Don't give penalty to our best move, so skip it.
-
-        // Penalize moves that didn't cause a beta cutoff.
-        updateContinuationHistories(ss, st.board.pieceAtB(from(move)), move, -bonus);
-        updateH(st.searchHistory[st.board.pieceAtB(from(move))][to(move)], -bonus);
-    }
-}
-
-int getHistoryScores(int &his, int &ch, int &fmh, SearchThread &st, SearchStack *ss, const Move move)
-{
-    Piece moved_piece = st.board.pieceAtB(from(move));
-
-    his = st.searchHistory[moved_piece][to(move)];
-
-    ch = (ss - 1)->move ? (*(ss - 1)->continuationHistory)[moved_piece][to(move)] : 0;
-    fmh = (ss - 2)->move ? (*(ss - 2)->continuationHistory)[moved_piece][to(move)] : 0;
-
-    return his + ch + fmh;
-}
-
+<<<<<<<<< Temporary merge branch 1
 bool StagedMoveGenerator::hasNext() const
 {
     // Still have moves to generate in current stage or more stages to go
@@ -414,4 +387,65 @@ Move StagedMoveGenerator::nextMove()
     
     // No moves left
     return NO_MOVE;
+=========
+void updateH(int16_t &historyScore, const int bonus)
+{
+    historyScore += bonus - historyScore * std::abs(bonus) / MAXHISTORY;
+}
+
+void updateCH(int16_t &historyScore, const int bonus)
+{
+
+    historyScore += bonus - historyScore * std::abs(bonus) / MAXCOUNTERHISTORY;
+}
+
+void updateContinuationHistories(SearchStack *ss, Piece piece, Move move, int bonus)
+{
+
+    if ((ss - 1)->move)
+    {
+        updateCH((*(ss - 1)->continuationHistory)[ss->movedPice][to(move)], bonus);
+    }
+
+    if ((ss - 2)->move)
+    {
+        updateCH((*(ss - 2)->continuationHistory)[ss->movedPice][to(move)], bonus);
+    }
+}
+
+void updateHistories(SearchThread &st, SearchStack *ss, Move bestmove, Movelist &quietList, int depth)
+{
+    // Update best move score
+    int bonus = historyBonus(depth);
+
+    if (depth > 2)
+    {
+        updateH(st.searchHistory[st.board.pieceAtB(from(bestmove))][to(bestmove)], bonus);
+        updateContinuationHistories(ss, st.board.pieceAtB(from(bestmove)), bestmove, bonus);
+    }
+
+    for (int i = 0; i < quietList.size; i++)
+    {
+        Move move = quietList[i].move;
+
+        if (move == bestmove)
+            continue; // Don't give penalty to our best move, so skip it.
+
+        // Penalize moves that didn't cause a beta cutoff.
+        updateContinuationHistories(ss, st.board.pieceAtB(from(move)), move, -bonus);
+        updateH(st.searchHistory[st.board.pieceAtB(from(move))][to(move)], -bonus);
+    }
+}
+
+int getHistoryScores(int &his, int &ch, int &fmh, SearchThread &st, SearchStack *ss, const Move move)
+{
+    Piece moved_piece = st.board.pieceAtB(from(move));
+
+    his = st.searchHistory[moved_piece][to(move)];
+
+    ch = (ss - 1)->move ? (*(ss - 1)->continuationHistory)[moved_piece][to(move)] : 0;
+    fmh = (ss - 2)->move ? (*(ss - 2)->continuationHistory)[moved_piece][to(move)] : 0;
+
+    return his + ch + fmh;
+>>>>>>>>> Temporary merge branch 2
 }
