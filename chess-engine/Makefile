@@ -9,7 +9,7 @@ BIN_DIR = bin
 
 # Source files
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
-COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter-out $(SRC_DIR)/bench.cpp $(SRC_DIR)/uci.cpp $(SRC_DIR)/main.cpp $(SRC_DIR)/tune.cpp $(SRC_DIR)/tune_bench.cpp $(SRC_DIR)/bot_match.cpp,$(SRCS)))
+COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter-out $(SRC_DIR)/bench.cpp $(SRC_DIR)/uci.cpp $(SRC_DIR)/main.cpp $(SRC_DIR)/tune.cpp $(SRC_DIR)/tune_bench.cpp $(SRC_DIR)/bot_match.cpp stockfish.cpp,$(SRCS)))
 
 # Target executables
 TARGET = $(BIN_DIR)/uci.exe
