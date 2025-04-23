@@ -3,7 +3,10 @@
 
 #include "types.hpp"  // Include this first to get basic types
 #include "chess.hpp"  // Then include chess.hpp for the full implementation
+#include "types.hpp"  // Include this first to get basic types
+#include "chess.hpp"  // Then include chess.hpp for the full implementation
 
+Chess::Bitboard getKingRing(const Chess::Board& board, Chess::Color color);
 Chess::Bitboard getKingRing(const Chess::Board& board, Chess::Color color);
 
 // Helper structures
@@ -15,7 +18,10 @@ struct EvalInfo {
     // Cached bitboards
     Chess::Bitboard kingRings[2];
     Chess::Bitboard outpostSquares[2];
-    
+    // Cached bitboards
+    Chess::Bitboard kingRings[2];
+    Chess::Bitboard outpostSquares[2];
+
     EvalInfo(const Chess::Board& b) : board(b), mgScore(0), egScore(0) {
         // Initialize king rings
         kingRings[Chess::White] = getKingRing(board, Chess::White);
@@ -28,7 +34,10 @@ struct EvalInfo {
 };
 
 // Helper functions
+// Helper functions
 
+bool canPawnAttackSquare(const Chess::Board& board, Chess::Square sq, Chess::Color attackingColor);
+bool isPawnProtected(const Chess::Board& board, Chess::Square sq, Chess::Color color);
 bool canPawnAttackSquare(const Chess::Board& board, Chess::Square sq, Chess::Color attackingColor);
 bool isPawnProtected(const Chess::Board& board, Chess::Square sq, Chess::Color color);
 

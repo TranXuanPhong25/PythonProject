@@ -1,6 +1,7 @@
 #pragma once
 #include "chess.hpp"
 #include "types.hpp"
+#include "evaluate_features.hpp"
 // Piece values for evaluation
 constexpr int PAWN_VALUE = 100;
 constexpr int KNIGHT_VALUE = 320;

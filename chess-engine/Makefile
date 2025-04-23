@@ -9,7 +9,7 @@ BIN_DIR = bin
 
 # Source files
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
-COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter-out $(SRC_DIR)/bench.cpp $(SRC_DIR)/uci.cpp $(SRC_DIR)/main.cpp $(SRC_DIR)/tune.cpp $(SRC_DIR)/tune_bench.cpp $(SRC_DIR)/bot_match.cpp,$(SRCS)))
+COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter-out $(SRC_DIR)/bench.cpp $(SRC_DIR)/uci.cpp $(SRC_DIR)/main.cpp $(SRC_DIR)/tune.cpp $(SRC_DIR)/tune_bench.cpp $(SRC_DIR)/bot_match.cpp stockfish.cpp,$(SRCS)))
 
 # Target executables
 TARGET = $(BIN_DIR)/uci.exe
@@ -46,7 +46,7 @@ dirs:
 	@mkdir -p $(BIN_DIR)
 
 # Link object files to create UCI executable - explicitly list all required object files
-$(TARGET): $(BUILD_DIR)/main.o $(BUILD_DIR)/uci.o $(BUILD_DIR)/chess.o $(BUILD_DIR)/evaluate.o $(BUILD_DIR)/evaluate_pieces.o $(BUILD_DIR)/evaluate_features.o $(BUILD_DIR)/evaluate_threatEG.o $(BUILD_DIR)/search.o $(BUILD_DIR)/tunable_params.o $(BUILD_DIR)/tt.o $(BUILD_DIR)/score_move.o $(BUILD_DIR)/see.o
+$(TARGET): $(BUILD_DIR)/main.o $(BUILD_DIR)/uci.o $(BUILD_DIR)/chess.o $(BUILD_DIR)/evaluate.o $(BUILD_DIR)/evaluate_pieces.o $(BUILD_DIR)/evaluate_features.o $(BUILD_DIR)/evaluate_attacks.o $(BUILD_DIR)/evaluate_mobility.o $(BUILD_DIR)/search.o $(BUILD_DIR)/tunable_params.o $(BUILD_DIR)/tt.o $(BUILD_DIR)/score_move.o $(BUILD_DIR)/see.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ -static-libgcc -static-libstdc++
 
 # Compile source files into object files

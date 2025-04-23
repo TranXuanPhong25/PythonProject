@@ -8,7 +8,7 @@ import time
 
 load_dotenv()
 # Cấu hình Pygame
-LAST_MOVE = (255, 255, 0, 10)  # Light yellow color for last move highlighting
+LAST_MOVE = (255, 255, 0, 10, 10)  # Light yellow color for last move highlighting
 pygame.init()
 pygame.mixer.init()  # Initialize Pygame mixer for sound effects
 MOVE_SOUND = pygame.mixer.Sound("assets/sounds/move.mp3")  # Path to move sound effect
