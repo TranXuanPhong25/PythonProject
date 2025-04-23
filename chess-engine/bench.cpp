@@ -65,7 +65,8 @@ const std::string positions[] = {
       "rn2Rb1r/2k2ppp/p1P2q2/1p6/2p1Q3/2P2B1P/P4PP1/1RB3K1 b - - 1 19",
       "r1bq1rk1/ppp2ppp/5n2/3pb3/8/P1NBP3/1PP2PPP/R1BQ1RK1 w - - 0 10",
       "r3r1k1/pppq1ppp/8/3p2P1/2b1nP2/P1P1PB2/1BP4P/R2QR1K1 w - - 3 18",
-      "r3r1k1/ppp2ppp/8/3p2P1/2b1nP2/P1P1PB1q/1BP4P/1R1QR1K1 w - - 5 19"
+      "r3r1k1/ppp2ppp/8/3p2P1/2b1nP2/P1P1PB1q/1BP4P/1R1QR1K1 w - - 5 19",
+      "r7/8/3b2k1/1p3p2/1N1P3p/2P4P/2Pn1PP1/q3R1KR w - - 0 49"
    };
 const std::string targetMoves[] = {
     "b2b3",
@@ -88,13 +89,15 @@ const std::string targetMoves[] = {
       "g7g5",
       "f2f4",
       "f3g2",
-      "f3g2"
+      "f3g2",
+      "b4d3"
    };
 
 // Test if the engine finds the expected best move for a position
 bool testPosition(const std::string &fen, const std::string &expectedMove, int depth)
 {
-   SearchThread st;
+   SearchInfo info;  
+   SearchThread st(info);
    st.board = Board(fen);
 
    std::cout << "Testing position: " << fen << std::endl;
