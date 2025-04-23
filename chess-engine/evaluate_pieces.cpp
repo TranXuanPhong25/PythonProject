@@ -1,15 +1,16 @@
-#include "evaluate_pieces.hpp"
-#include <algorithm>
+// #include "evaluate_pieces.hpp"
+// #include <algorithm>
 
 using namespace Chess;
 
 // Helper functions
 Bitboard getKingRing(const Board& board, Color color) {
+   
     Square kingSq = board.KingSQ(color);
     Bitboard kingRing = 0;
     
     // Add all squares adjacent to the king
-   for (int dr = -1; dr <= 1; dr++) {
+    for (int dr = -1; dr <= 1; dr++) {
         for (int df = -1; df <= 1; df++) {
             if (dr == 0 && df == 0) continue; // Skip the king square itself
             
@@ -21,7 +22,7 @@ Bitboard getKingRing(const Board& board, Color color) {
             }
         }
     }
-    
+
     return kingRing;
 }
 
@@ -310,7 +311,7 @@ void evaluateBishops(EvalInfo& ei, Color color) {
                 }
             }
         } else {
-            for (int r = rank - 1; r >= 0; r--) {
+            for (int r = rank - 1; r >= 0; r++) {
                 if (pawns & (1ULL << (r * 8 + file))) {
                     bonus += 5;
                     break;

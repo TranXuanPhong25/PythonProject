@@ -3,10 +3,13 @@
 #include "evaluate_pieces.hpp"
 #include "evaluate_threatEG.hpp"
 #include "chess.hpp"
+#include "evaluate_pieces.hpp"
+#include "evaluate_attacks.hpp"  // Added include for attack evaluation
 
 // Convert from Chess::Square to 0-63 index for piece-square tables
 inline int squareToIndex(Square sq)
 {
+    return (7 - square_rank(sq)) * 8 + square_file(sq);
     return (7 - square_rank(sq)) * 8 + square_file(sq);
 }
 
@@ -14,6 +17,20 @@ inline int squareToIndex(Square sq)
 inline int getFlippedSquare(Square sq)
 {
     return squareToIndex(sq) ^ 56; // Flips vertically
+}
+
+// Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
+inline float getGamePhase(const Board &board)
+{
+    int remainingMaterial =
+        popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
+        popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KNIGHT_VALUE +
+        popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BISHOP_VALUE +
+        popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * ROOK_VALUE +
+        popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QUEEN_VALUE;
+
+    float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
+    return phase;
 }
 
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
@@ -70,16 +87,14 @@ int evaluate(const Board &board)
                 score += KING_MG_PST[idx] * (1.0f - endgameWeight) +
                          KING_EG_PST[idx] * endgameWeight;
                 break;
-            default:
-                break;
             }
         }
 
-        // BLACK
-        while (blackPieces)
-        {
-            Square sq = static_cast<Square>(pop_lsb(blackPieces));
-            score -= PIECE_VALUES[pt];
+         // BLACK
+         while (blackPieces)
+         {
+             Square sq = static_cast<Square>(pop_lsb(blackPieces));
+             score -= PIECE_VALUES[pt];
 
             int flippedIdx = getFlippedSquare(sq);
 
@@ -104,12 +119,9 @@ int evaluate(const Board &board)
                 score -= KING_MG_PST[flippedIdx] * (1.0f - endgameWeight) +
                          KING_EG_PST[flippedIdx] * endgameWeight;
                 break;
-            default:
-                break;
             }
         }
     }
-
     // Bishop pair bonus
     if (popcount(board.pieces(BISHOP, White)) >= 2)
         score += 30;
@@ -141,31 +153,18 @@ int evaluate(const Board &board)
     if (popcount(board.pieces(ROOK, Black)) >= 2)
         score -= 20;
 
-    //  //Evaluate PawnStructure
-    score += (board.sideToMove == White ? evaluatePawnStructure(board) : -evaluatePawnStructure(board));
+    // Evaluate PawnStructure
+    score += evaluatePawnStructure(board) * 0.8;
 
     // Evaluate center control
-    score += (board.sideToMove == White ? evaluateCenterControl(board) : -evaluateCenterControl(board));
-
-    // Evaluate mobility
-    score += (board.sideToMove == White ? evaluateMobility(board, White) : -evaluateMobility(board, Black));
-
-    // King safety (middle game)
-    if (getGamePhase(board) < 0.5)
-    { // Middle game
-        score += (board.sideToMove == White ? evaluateKingSafety(board, White) : -evaluateKingSafety(board, Black));
-        score += (board.sideToMove == White ? evaluateKingOpenFiles(board, White) : -evaluateKingOpenFiles(board, Black));
-    }
-
-    // King mobility (both phases)
-    score += (board.sideToMove == White ? evaluateKingMobility(board, White) : -evaluateKingMobility(board, Black));
-
-    // King checkmate potential (both phases)
-    score += (board.sideToMove == White ? evaluateQueenControlAndCheckmatePotential(board, White) : -evaluateQueenControlAndCheckmatePotential(board, Black));
-
-    // King castling ability (both phases)
-    score += (board.sideToMove == White ? evaluateCastlingAbility(board, White) : -evaluateCastlingAbility(board, Black));
-
+    score += evaluateCenterControl(board);
+    
+    // Evaluate pieces
+    score += evaluatePieces(board);
+    
+    // Add attack evaluation with appropriate weight
+    score += evaluateAttacks(board) * 0.7;
+    
     // Return score from perspective of side to move
     return board.sideToMove == White ? score : -score;
 }

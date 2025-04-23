@@ -197,13 +197,8 @@ int main(int argc, char *argv[])
    // Create and initialize TT
    auto ttable = std::make_unique<TranspositionTable>();
    table = ttable.get();
-   table->Initialize(128);
-   int maxDepth = 13; // Default max depth for benchmarking
-   Board board(DEFAULT_POS);
-   for (int d = 1; d <= 8; d++) {
-      getBestMove(board, d, table);
-   }
-   // benchPerft(maxDepth);
+   table->Initialize(64);
+
    auto start = std::chrono::high_resolution_clock::now();
    runTests(testDepth);
 
