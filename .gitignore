@@ -6,5 +6,4 @@ chess-engine/bin/
 chess-engine/build/
 .idea/
 .env
-*.pgn
 chess-engine/best_params_gen_*.txt
