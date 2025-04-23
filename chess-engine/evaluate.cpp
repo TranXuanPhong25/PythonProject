@@ -8,6 +8,7 @@
 inline int squareToIndex(Square sq)
 {
     return (7 - square_rank(sq)) * 8 + square_file(sq);
+    return (7 - square_rank(sq)) * 8 + square_file(sq);
 }
 
 // Get flipped square for black pieces (to use same tables for both colors)
@@ -73,11 +74,11 @@ int evaluate(const Board &board)
             }
         }
 
-        // BLACK
-        while (blackPieces)
-        {
-            Square sq = static_cast<Square>(pop_lsb(blackPieces));
-            score -= PIECE_VALUES[pt];
+         // BLACK
+         while (blackPieces)
+         {
+             Square sq = static_cast<Square>(pop_lsb(blackPieces));
+             score -= PIECE_VALUES[pt];
 
             int flippedIdx = getFlippedSquare(sq);
 
