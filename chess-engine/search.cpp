@@ -79,6 +79,7 @@ int score_from_tt(int score, int ply)
 
 int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 {
+   PROFILE_SCOPE(quiescence);
    st.nodes++;
    /* We return static evaluation if we exceed max depth */
    Board &board = st.board;
@@ -90,7 +91,14 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
    {
       return 0;
    }
-   int standPat = evaluate(board);
+   // Time the evaluation
+   int standPat;
+   {
+      PROFILE_SCOPE(evaluation);
+      standPat = evaluate(board);
+      profiler.evaluations++;
+   }
+
    if (standPat >= beta)
       return beta;
 
@@ -105,11 +113,19 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
    /* Probe Tranpsosition Table */
    bool ttHit = false;
    bool isPVNode = (beta - alpha) > 1;
-   TTEntry &ttEntry = table->probe_entry(board.hashKey, ttHit);
+   bool inCheck = board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove));   TTEntry &ttEntry = table->probe_entry(board.hashKey, ttHit);
 
    const int ttScore = ttHit ? score_from_tt(ttEntry.get_score(), ss->ply) : 0;
 
    /* Return TT score if we found a TT entry*/
+   Move ttMove = ttHit ? tte.move : NO_MOVE;
+   {
+      PROFILE_SCOPE(ttLookup);
+      profiler.ttLookups++;
+      if (ttHit)
+         profiler.ttHits++;
+   }
+
    if (!isPVNode && ttHit)
    {
       if ((ttEntry.flag == HFALPHA && ttScore <= alpha) || (ttEntry.flag == HFBETA && ttScore >= beta) ||
@@ -122,11 +138,16 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
    int score = -INF_BOUND;
    Move bestMove = NO_MOVE;
 
+   // Time the move generation
    Movelist captures;
-   if (board.sideToMove == White)
-      Movegen::legalmoves<White, CAPTURE>(board, captures);
-   else
-      Movegen::legalmoves<Black, CAPTURE>(board, captures);
+   {
+      PROFILE_SCOPE(moveGen);
+      profiler.moveGens++;
+
+      if (board.sideToMove == White)
+         Movegen::legalmoves<White, CAPTURE>(board, captures);
+      else
+         Movegen::legalmoves<Black, CAPTURE>(board, captures);
 
    scoreMovesForQS(st.board, captures, ttEntry.move);
 
@@ -157,15 +178,28 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
 
       ss->continuationHistory = &st.continuationHistory[ss->movedPice][to(move)];
 
-      board.makeMove(move);
-      table->prefetch_tt(board.hashKey);
+
+      // Time move making
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.makeMove(move);
+         table->prefetch_tt(board.hashKey);
 
       (ss + 1)->ply = ss->ply + 1;
+         profiler.movesMade++;
+      }
+
       moveCount++;
       ss->move = move;
 
       score = -quiescence(-beta, -alpha, st, ss + 1);
-      board.unmakeMove(move);
+
+      // Time move unmaking
+      {
+         PROFILE_SCOPE(moveMaking);
+         board.unmakeMove(move);
+      }
+
       if (score > bestScore)
       {
          bestMove = move;
@@ -186,11 +220,14 @@ int quiescence(int alpha, int beta, SearchThread &st, SearchStack *ss)
    int flag = bestScore >= beta ? HFBETA : HFALPHA;
 
    /* Store transposition table entry */
+   // Store in TT
+   int flag = bestValue >= beta ? HFBETA : HFALPHA;
    table->store(board.hashKey, flag, bestMove, 0, score_to_tt(bestScore, ss->ply), standPat);
 
    /* Return bestscore achieved */
    return bestScore;
 }
+
 
 int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, bool cutnode)
 {
@@ -352,7 +389,13 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
             }
 
             ss->continuationHistory = &st.continuationHistory[ss->movedPice][to(move)];
+            // Make/unmake move with timing
+         {
+            PROFILE_SCOPE(moveMaking);
             board.makeMove(move);
+            profiler.movesMade++;
+         }
+
 
             score = -quiescence(-rbeta, -rbeta + 1, st, ss);
 
@@ -361,7 +404,11 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
                score = -negamax(-rbeta, -rbeta + 1, depth - 4, st, ss, !cutnode);
             }
 
+   
+         {
+            PROFILE_SCOPE(moveMaking);
             board.unmakeMove(move);
+         }
 
             if (score >= rbeta)
             {

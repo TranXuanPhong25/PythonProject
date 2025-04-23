@@ -8,6 +8,9 @@
 #include <memory.h>
 #include <algorithm>
 #include <math.h>
+#include <algorithm>
+#include <cmath>
+#include <math.h>
 using namespace Chess;
 using HistoryTable = std::array<std::array<int16_t, 64>, 13>;
 
