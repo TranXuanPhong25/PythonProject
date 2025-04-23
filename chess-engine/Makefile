@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -g
+CXXFLAGS = -std=c++20 -Wall -g -O2 -fno-omit-frame-pointer -fstack-protector-all
 
 # Directories
 SRC_DIR = .
@@ -9,7 +9,7 @@ BIN_DIR = bin
 
 # Source files
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
-COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter-out $(SRC_DIR)/bench.cpp $(SRC_DIR)/uci.cpp $(SRC_DIR)/main.cpp $(SRC_DIR)/tune.cpp $(SRC_DIR)/tune_bench.cpp $(SRC_DIR)/bot_match.cpp,$(SRCS)))
+COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter-out $(SRC_DIR)/bench.cpp $(SRC_DIR)/uci.cpp $(SRC_DIR)/main.cpp $(SRC_DIR)/tune.cpp $(SRC_DIR)/tune_bench.cpp $(SRC_DIR)/bot_match.cpp stockfish.cpp,$(SRCS)))
 
 # Target executables
 TARGET = $(BIN_DIR)/uci.exe
@@ -45,55 +45,24 @@ dirs:
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(BIN_DIR)
 
-<<<<<<< HEAD
 # Link object files to create UCI executable - explicitly list all required object files
 $(TARGET): $(BUILD_DIR)/main.o $(BUILD_DIR)/uci.o $(BUILD_DIR)/chess.o $(BUILD_DIR)/evaluate.o $(BUILD_DIR)/evaluate_pieces.o $(BUILD_DIR)/evaluate_features.o $(BUILD_DIR)/search.o $(BUILD_DIR)/tunable_params.o $(BUILD_DIR)/tt.o $(BUILD_DIR)/score_move.o $(BUILD_DIR)/see.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ -static-libgcc -static-libstdc++
-=======
-# Link object files to create UCI executable
-$(TARGET): $(COMMON_OBJS) $(BUILD_DIR)/main.o $(BUILD_DIR)/uci.o
-	$(CXX) $(CXXFLAGS) $^ -o $@
-
-# Link object files to create benchmark executable
-$(BENCH_TARGET): $(COMMON_OBJS) $(BUILD_DIR)/bench.o
-	$(CXX) $(CXXFLAGS) $^ -o $@
-
-# Link object files to create tuning executable
-$(TUNE_TARGET): $(COMMON_OBJS) $(BUILD_DIR)/tune.o
-	$(CXX) $(CXXFLAGS) $^ -o $@
-
-# Link object files to create benchmark-based tuning executable
-$(TUNE_BENCH_TARGET): $(COMMON_OBJS) $(BUILD_DIR)/tune_bench.o
-	$(CXX) $(CXXFLAGS) $^ -o $@
-
-# Link object files to create bot match executable
-$(BOT_MATCH_TARGET): $(COMMON_OBJS) $(BUILD_DIR)/bot_match.o
-	$(CXX) $(CXXFLAGS) $^ -o $@
->>>>>>> 1274aeaf2f1b4440d210279cf29aa9bf0455cbc7
 
 # Compile source files into object files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Display all object files that will be built
-list-objects:
-	@echo "Common objects:"
-	@for obj in $(COMMON_OBJS); do echo "  $$obj"; done
-	@echo "UCI objects: $(COMMON_OBJS) $(BUILD_DIR)/main.o $(BUILD_DIR)/uci.o"
-	@echo "Benchmark objects: $(COMMON_OBJS) $(BUILD_DIR)/bench.o"
-	@echo "Tune objects: $(COMMON_OBJS) $(BUILD_DIR)/tune.o"
-	@echo "Tune-bench objects: $(COMMON_OBJS) $(BUILD_DIR)/tune_bench.o"
-	@echo "Bot-match objects: $(COMMON_OBJS) $(BUILD_DIR)/bot_match.o"
-
 # Clean build files
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
-# Debug info
-debug:
-	@echo "Source files: $(SRCS)"
-	@echo "UCI objects: $(COMMON_OBJS) $(BUILD_DIR)/main.o $(BUILD_DIR)/uci.o"
-	@echo "Benchmark objects: $(COMMON_OBJS) $(BUILD_DIR)/bench.o"
-	@echo "Tune objects: $(COMMON_OBJS) $(BUILD_DIR)/tune.o"
-	@echo "Tune-bench objects: $(COMMON_OBJS) $(BUILD_DIR)/tune_bench.o"
-	@echo "Bot-match objects: $(COMMON_OBJS) $(BUILD_DIR)/bot_match.o"
+# Touch files to force recompilation
+rebuild: clean all
+
+# Create parameter files if they don't exist
+params:
+	@echo "Creating default parameter files if they don't exist"
+	@if [ ! -f "benchmark_best_params.txt" ]; then \
+		echo "RFP_MARGIN 75\nRFP_DEPTH 5\nRFP_IMPROVING_BONUS 62\nLMR_BASE 75\nLMR_DIVISION 225\nNMP_BASE 3\nNMP_DIVISION 3\nNMP_MARGIN 180\nLMP_DEPTH_THRESHOLD 5\nFUTILITY_MARGIN 100\nFUTILITY_DEPTH 8\nFUTILITY_IMPROVING 50\nQS_FUTILITY_MARGIN 150\nSEE_QUIET_MARGIN_BASE -10\nSEE_NOISY_MARGIN_BASE -50\nASPIRATION_DELTA 15\nHISTORY_PRUNING_THRESHOLD 5000" > benchmark_best_params.txt; \
+	fi
