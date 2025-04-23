@@ -1,5 +1,10 @@
 #include "evaluate_features.hpp"
 
+// External declarations for search-related variables
+extern Move killerMoves[MAX_PLY][2];
+extern int historyTable[2][64][64];
+extern int mvv_lva[12][12];
+
 using namespace Chess;
 
 // Constructor implementation for PawnStructureContext
