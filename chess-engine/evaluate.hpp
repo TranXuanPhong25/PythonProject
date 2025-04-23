@@ -1,7 +1,6 @@
 #pragma once
 #include "chess.hpp"
 #include "types.hpp"
-#include "evaluate_features.hpp"
 // Piece values for evaluation
 constexpr int PAWN_VALUE = 100;
 constexpr int KNIGHT_VALUE = 320;
@@ -92,7 +91,7 @@ const int KING_EG_PST[64] = {
     -50, -30, -30, -30, -30, -30, -30, -50};
 
 // Function to determine game phase (0 = opening, 1 = endgame)
-float getGamePhase(const Board &board);
+inline float getGamePhase(const Board &board);
 
 // Evaluate function with piece-square tables
 int evaluate(const Board &board);

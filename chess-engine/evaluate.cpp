@@ -1,27 +1,21 @@
 #include "evaluate.hpp"
 #include "evaluate_features.hpp"
-#include "evaluate_pieces.hpp"
-#include "evaluate_threatEG.hpp"
 #include "chess.hpp"
 #include "evaluate_pieces.hpp"
-#include "evaluate_attacks.hpp"  // Added include for attack evaluation
-
 // Convert from Chess::Square to 0-63 index for piece-square tables
 inline int squareToIndex(Square sq)
 {
     return (7 - square_rank(sq)) * 8 + square_file(sq);
-    return (7 - square_rank(sq)) * 8 + square_file(sq);
 }
 
-// Flips a square from white's perspective to black's perspective
-inline int flipSquareVertically(Square sq) {
-    // For symmetry, black pieces need to see the board flipped vertically
-    // A1 (rank 0) becomes A8 (rank 7), etc.
-    return square_file(sq) + (7 - square_rank(sq)) * 8;
+// Get flipped square for black pieces (to use same tables for both colors)
+inline int getFlippedSquare(Square sq)
+{
+    return squareToIndex(sq) ^ 56; // Flips vertically
 }
 
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
-float getGamePhase(const Board &board)
+inline float getGamePhase(const Board &board)
 {
     int remainingMaterial =
         popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
@@ -77,13 +71,13 @@ int evaluate(const Board &board)
             }
         }
 
-         // BLACK
-         while (blackPieces)
-         {
-             Square sq = static_cast<Square>(pop_lsb(blackPieces));
-             score -= PIECE_VALUES[pt];
+        // BLACK
+        while (blackPieces)
+        {
+            Square sq = static_cast<Square>(pop_lsb(blackPieces));
+            score -= PIECE_VALUES[pt];
 
-            int flippedIdx = flipSquareVertically(sq);
+            int flippedIdx = getFlippedSquare(sq);
 
             switch (pt)
             {
@@ -115,43 +109,18 @@ int evaluate(const Board &board)
     if (popcount(board.pieces(BISHOP, Black)) >= 2)
         score -= 30;
 
-   // Rook pair bonus
-   if (popcount(board.pieces(ROOK, White)) >= 2)
-      score += 20;
-   if (popcount(board.pieces(ROOK, Black)) >= 2)
-      score -= 20;
-   
-   score += evaluatePieces(board);
-
-   // Evaluate PawnStructure
-   score += evaluatePawnStructure(board);
-   
-   // Evaluate center control
-   score += evaluateCenterControl(board);
-   
-   // Apply threat evaluation in endgame with proper scaling based on game phase
-   if (endgameWeight > 0.0f) {
-      int threatScore = threats_endgame(board);
-      score += threatScore * endgameWeight;
-   }
     // Rook pair bonus
     if (popcount(board.pieces(ROOK, White)) >= 2)
         score += 20;
     if (popcount(board.pieces(ROOK, Black)) >= 2)
         score -= 20;
 
-    // Evaluate PawnStructure
+    //  //Evaluate PawnStructure
     score += evaluatePawnStructure(board) * 0.8;
 
     // Evaluate center control
     score += evaluateCenterControl(board);
-    
-    // Evaluate pieces
     score += evaluatePieces(board);
-    
-    // Add attack evaluation with appropriate weight
-    score += evaluateAttacks(board) * 0.7;
-    
     // Return score from perspective of side to move
     return board.sideToMove == White ? score : -score;
 }
