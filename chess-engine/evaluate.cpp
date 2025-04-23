@@ -13,10 +13,11 @@ inline int squareToIndex(Square sq)
     return (7 - square_rank(sq)) * 8 + square_file(sq);
 }
 
-// Get flipped square for black pieces (to use same tables for both colors)
-inline int getFlippedSquare(Square sq)
-{
-    return squareToIndex(sq) ^ 56; // Flips vertically
+// Flips a square from white's perspective to black's perspective
+inline int flipSquareVertically(Square sq) {
+    // For symmetry, black pieces need to see the board flipped vertically
+    // A1 (rank 0) becomes A8 (rank 7), etc.
+    return square_file(sq) + (7 - square_rank(sq)) * 8;
 }
 
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
