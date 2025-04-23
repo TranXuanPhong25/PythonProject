@@ -8,7 +8,7 @@ import time
 
 load_dotenv()
 # Cấu hình Pygame
-LAST_MOVE = (255, 255, 0, 10, 10)  # Light yellow color for last move highlighting
+LAST_MOVE = (255, 255, 0, 10)  # Light yellow color for last move highlighting
 pygame.init()
 pygame.mixer.init()  # Initialize Pygame mixer for sound effects
 MOVE_SOUND = pygame.mixer.Sound("assets/sounds/move.mp3")  # Path to move sound effect
@@ -17,7 +17,6 @@ WIDTH, HEIGHT = 1040, 860  # Increased width to accommodate the sidebar
 BOARD_WIDTH = 840
 SQUARE_SIZE = 100
 # scale down
-
 WHITE = (240, 217, 181)
 BROWN = (181, 136, 99)
 HIGHLIGHT = (186, 202, 68)  # Màu highlight ô được chọn
@@ -27,11 +26,12 @@ MOVE_FONT = pygame.font.Font(None, 24)  # Font for move history
 SIDEBAR_BG = (40, 40, 40)  # Dark background for sidebar
 SIDEBAR_TEXT = (220, 220, 220)  # Light color for sidebar text
 MOVE_HIGHLIGHT = (100, 100, 220)  # Highlight color for moves
-AI_TIME_LIMIT = float(os.getenv("AI_TIME_LIMIT", 10))
+AI_TIME_LIMIT = os.getenv("AI_TIME_LIMIT", 5)
 ENGINE_PATH = os.getenv("ENGINE_PATH", "chess-engine/bin/uci.exe").split()
 CUSTOM_FEN = os.getenv("CUSTOM_FEN",
                        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")  # Empty string if not set
 SCALE = int(os.getenv("SCALE", 100))  # Scale percentage for the board
+print(AI_TIME_LIMIT)
 # Add this constant near the top with your other color definitions
 LEGAL_MOVE_INDICATOR = (255, 255, 255, 170)  # Semi-transparent white for move indicators
 UNDO_HIGHLIGHT = (255, 100, 100, 200)  # Red highlight for undo moves
@@ -524,7 +524,7 @@ board = chess.Board(CUSTOM_FEN)
 
 game_state = MODE_SELECTION  # Start in mode selection state
 game_mode = None
-ai_depth = 3  # Default depth
+ai_depth = 15  # Default depth
 input_text = ''  # Text input for depth
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -763,7 +763,7 @@ while running:
         if not player_turn and not board.is_game_over() and game_mode != HUMAN_VS_HUMAN and not animating:
             start_time = time.time()
             try:
-                result = engine.play(board, chess.engine.Limit(depth=ai_depth, time=AI_TIME_LIMIT))
+                result = engine.play(board, chess.engine.Limit(depth=ai_depth,time=AI_TIME_LIMIT))
                 if result.move is not None:
                     last_move_from = result.move.from_square
                     last_move_to = result.move.to_square
