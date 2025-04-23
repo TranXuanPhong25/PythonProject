@@ -1,10 +1,10 @@
 #pragma once
 
 #include "chess.hpp"
+#include "misc.hpp"
 #include <cstdint>
 
 using namespace Chess;
-
 #define NAME "Rice"
 #define AUTHOR "Slender"
 
