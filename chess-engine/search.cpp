@@ -539,7 +539,7 @@ int negamax(int alpha, int beta, int depth, SearchThread &st, SearchStack *ss, b
 
          reduction += !improving;                                /* Increase reduction if we're not improving. */
          reduction += !isPVNode;                                 /* Increase for non pv nodes */
-         reduction += isQuiet && !see(board, move, -50 * depth); /* Increase for quiet moves that lose material */
+         // reduction += isQuiet && !see(board, move, -50 * depth); /* Increase for quiet moves that lose material */
          reduction += isQuiet && !givesCheck;                    /* Increase for quiet moves that don't give check */
          // reduction += (isQuiet&&cutnode)*2;
          // Reduce two plies if it's a counter or killer
