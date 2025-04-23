@@ -763,7 +763,7 @@ while running:
         if not player_turn and not board.is_game_over() and game_mode != HUMAN_VS_HUMAN and not animating:
             start_time = time.time()
             try:
-                result = engine.play(board, chess.engine.Limit(depth=ai_depth,time=AI_TIME_LIMIT))
+                result = engine.play(board, chess.engine.Limit(depth=ai_depth,time=float(AI_TIME_LIMIT)))
                 if result.move is not None:
                     last_move_from = result.move.from_square
                     last_move_to = result.move.to_square
