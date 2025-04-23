@@ -92,18 +92,7 @@ const int KING_EG_PST[64] = {
     -50, -30, -30, -30, -30, -30, -30, -50};
 
 // Function to determine game phase (0 = opening, 1 = endgame)
-float getGamePhase(const Board &board)
-{
-    int remainingMaterial =
-        popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
-        popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KNIGHT_VALUE +
-        popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BISHOP_VALUE +
-        popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * ROOK_VALUE +
-        popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QUEEN_VALUE;
-
-    float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
-    return phase;
-}
+float getGamePhase(const Board &board);
 
 // Evaluate function with piece-square tables
 int evaluate(const Board &board);

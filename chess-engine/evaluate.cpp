@@ -13,10 +13,11 @@ inline int squareToIndex(Square sq)
     return (7 - square_rank(sq)) * 8 + square_file(sq);
 }
 
-// Get flipped square for black pieces (to use same tables for both colors)
-inline int getFlippedSquare(Square sq)
-{
-    return squareToIndex(sq) ^ 56; // Flips vertically
+// Flips a square from white's perspective to black's perspective
+inline int flipSquareVertically(Square sq) {
+    // For symmetry, black pieces need to see the board flipped vertically
+    // A1 (rank 0) becomes A8 (rank 7), etc.
+    return square_file(sq) + (7 - square_rank(sq)) * 8;
 }
 
 // Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
@@ -31,20 +32,6 @@ float getGamePhase(const Board &board)
 
     float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
     return phase;
-}
-
-// Calculate game phase based on remaining material (0.0 = opening, 1.0 = endgame)
-float getGamePhase(const Board &board)
-{
-   int remainingMaterial =
-       popcount(board.pieces(PAWN, White) | board.pieces(PAWN, Black)) * PAWN_VALUE +
-       popcount(board.pieces(KNIGHT, White) | board.pieces(KNIGHT, Black)) * KNIGHT_VALUE +
-       popcount(board.pieces(BISHOP, White) | board.pieces(BISHOP, Black)) * BISHOP_VALUE +
-       popcount(board.pieces(ROOK, White) | board.pieces(ROOK, Black)) * ROOK_VALUE +
-       popcount(board.pieces(QUEEN, White) | board.pieces(QUEEN, Black)) * QUEEN_VALUE;
-
-   float phase = 1.0f - std::min(1.0f, remainingMaterial / float(totalMaterial));
-   return phase;
 }
 
 int evaluate(const Board &board)
@@ -96,7 +83,7 @@ int evaluate(const Board &board)
              Square sq = static_cast<Square>(pop_lsb(blackPieces));
              score -= PIECE_VALUES[pt];
 
-            int flippedIdx = getFlippedSquare(sq);
+            int flippedIdx = flipSquareVertically(sq);
 
             switch (pt)
             {
