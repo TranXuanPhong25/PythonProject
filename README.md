@@ -1,3 +1,6 @@
+elo in chess.com: 2900
+elo calculated by match against stockfish limit 2500 at depth 15 tc=40/75: +11 +/- 65
+
 ## Acknowledgments
 
 Inspired by open-source engines like:
