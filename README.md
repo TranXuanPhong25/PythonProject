@@ -1,4 +1,5 @@
 [Link demo](https://youtube.com/watch?v=y-LLEPUXnK0)
+[slide](https://slidse-lzi6.vercel.app/1.html)
 </br>
 elo in chess.com: 3200+
 <br/>
