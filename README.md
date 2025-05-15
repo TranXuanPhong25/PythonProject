@@ -1,9 +1,12 @@
 [Link demo](https://youtube.com/watch?v=y-LLEPUXnK0)
-[slide](https://slidse-lzi6.vercel.app/1.html)
-</br>
-elo in chess.com: 3200+
 <br/>
-elo calculated by match against stockfish limit 2500 at depth 15 tc=40/75: +11 +/- 65
+[slide](https://slidse-lzi6.vercel.app/1.html)
+<br/>
+Elo in chess.com: 3000+
+<br/>
+Elo calculated by match against Stockfish limit 2500 at depth 15 tc=40/75: +11 +/- 65
+<br/>
+Match against Pigeon (1800 elo on CCRL) at depth 15 tc=40/75 : 23-17-13 (win-loss-draw)
 
 ## Acknowledgments
 
@@ -33,6 +36,8 @@ The engine employs modern search techniques to efficiently explore the game tree
   - **Futility Pruning**: Avoids searching moves unlikely to improve the position.
   - **Static Exchange Evaluation (SEE)**: Evaluates the outcome of captures and exchanges.
   - **Razoring**: Skips searches near leaf nodes unlikely to improve alpha.
+  - **History Pruning**: Prunes moves with a poor history of effectiveness.
+  - **ProbCut**: A selective pruning technique that uses shallow searches to estimate whether a move is unlikely to exceed the beta threshold. If the shallow search score is significantly below beta, the move is pruned without a deeper search. This helps reduce the search tree size in positions where certain moves are clearly suboptimal.
 - **Move Ordering**:
   - **Killer Moves**: Tracks non-capturing moves that cause cutoffs.
   - **History Heuristic**: Prioritizes moves that have been effective in the past.
@@ -48,29 +53,34 @@ The evaluation function combines multiple factors to assess the quality of a pos
 - **Pawn Structure**:
   - Evaluates isolated, doubled, and passed pawns.
   - Considers connected pawns and pawn chains.
-- **Piece Coordination**:
-  - Bonuses for bishop pairs and rook pairs.
-  - Penalties for trapped or poorly placed pieces.
 - **King Safety**:
   - Evaluates king safety based on pawn shield and attacking pieces.
   - Differentiates between middlegame and endgame king placement.
 - **Center Control**: Rewards control of central squares.
 
-## Piece-Specific Optimizations
-
-- **Pawns**:
-  - Bonuses for passed pawns and penalties for doubled or isolated pawns.
-- **Knights**:
-  - Bonuses for outposts and proximity to the enemy king.
-- **Bishops**:
-  - Bonuses for long diagonal control and bishop pairs.
-- **Rooks**:
-  - Bonuses for open and semi-open files.
-  - Rewards for occupying the seventh rank.
-- **Queens**:
-  - Rewards for mobility and infiltration into enemy territory.
-- **Kings**:
-  - Separate evaluation for middlegame and endgame positions.
-
 This combination of techniques ensures a strong and efficient chess engine capable of competing at a high level.
 
+## Techniques in Chess.hpp
+
+The `chess.hpp` file implements several foundational techniques for efficient chess engine functionality:
+
+### Data Structures
+
+- **Bitboard Representation**: Uses 64-bit integers to represent the chessboard, enabling fast bitwise operations for move generation and attack detection.
+- **Lookup Tables**: Precomputed tables for piece attacks (e.g., pawn attacks, knight moves) to speed up move generation.
+- **Magic Bitboards**: Optimized sliding piece move generation using magic numbers for efficient attack masking.
+
+### Chess-Board Techniques
+- **Zobrist Hashing**: Generates unique hash keys for board positions to enable transposition table lookups.
+- **Static Exchange Evaluation (SEE)**: Evaluates the outcome of captures and exchanges to determine move quality.
+- **Move Generation Masks**: Efficiently generates legal moves using attack and block masks.
+- **Move Encoding**: Compact representation of moves in 16-bit integers for efficient storage and processing.
+
+### Chess Logic Implementation
+
+- **Check Detection**: Uses attack patterns to determine if the king is in check.
+
+# Contribution
+- Nguyễn Quang Minh: evaluation, evaluate_features
+- Trần Xuân Phong: search heuristic
+- Triệu Cao Tấn: evaluate_pieces
