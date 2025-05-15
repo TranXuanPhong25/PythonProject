@@ -60,26 +60,6 @@ The evaluation function combines multiple factors to assess the quality of a pos
 
 This combination of techniques ensures a strong and efficient chess engine capable of competing at a high level.
 
-## Techniques in Chess.hpp
-
-The `chess.hpp` file implements several foundational techniques for efficient chess engine functionality:
-
-### Data Structures
-
-- **Bitboard Representation**: Uses 64-bit integers to represent the chessboard, enabling fast bitwise operations for move generation and attack detection.
-- **Lookup Tables**: Precomputed tables for piece attacks (e.g., pawn attacks, knight moves) to speed up move generation.
-- **Magic Bitboards**: Optimized sliding piece move generation using magic numbers for efficient attack masking.
-
-### Chess-Board Techniques
-- **Zobrist Hashing**: Generates unique hash keys for board positions to enable transposition table lookups.
-- **Static Exchange Evaluation (SEE)**: Evaluates the outcome of captures and exchanges to determine move quality.
-- **Move Generation Masks**: Efficiently generates legal moves using attack and block masks.
-- **Move Encoding**: Compact representation of moves in 16-bit integers for efficient storage and processing.
-
-### Chess Logic Implementation
-
-- **Check Detection**: Uses attack patterns to determine if the king is in check.
-
 # Contribution
 - Nguyễn Quang Minh: evaluation, evaluate_features
 - Trần Xuân Phong: search heuristic
