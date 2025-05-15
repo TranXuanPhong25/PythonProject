@@ -37,7 +37,7 @@ The engine employs modern search techniques to efficiently explore the game tree
   - **Static Exchange Evaluation (SEE)**: Evaluates the outcome of captures and exchanges.
   - **Razoring**: Skips searches near leaf nodes unlikely to improve alpha.
   - **History Pruning**: Prunes moves with a poor history of effectiveness.
-  - **ProbCut**: A selective pruning technique that uses shallow searches to estimate whether a move is unlikely to exceed the beta threshold. If the shallow search score is significantly below beta, the move is pruned without a deeper search. This helps reduce the search tree size in positions where certain moves are clearly suboptimal.
+  - **ProbCut**: A selective pruning technique that uses shallow searches to estimate whether a move is unlikely to exceed the beta threshold. 
 - **Move Ordering**:
   - **Killer Moves**: Tracks non-capturing moves that cause cutoffs.
   - **History Heuristic**: Prioritizes moves that have been effective in the past.
